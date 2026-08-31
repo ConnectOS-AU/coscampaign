@@ -71,6 +71,26 @@ export const READ_DEPTH_LABELS: Record<1 | 2 | 3 | 4, string> = {
   4: "100%",
 };
 
+export type EmailTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  unlayer_design_json: unknown;
+  html_content: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LibraryImage = {
+  id: string;
+  name: string;
+  storage_path: string;
+  public_url: string;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type CampaignFunnel = {
   processed: number;
   delivered: number;

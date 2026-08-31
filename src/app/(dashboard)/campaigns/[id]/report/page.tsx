@@ -108,7 +108,21 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
     if (e.event_type === "bounce" || e.event_type === "dropped") status.bounced = true;
     statusByContact.set(e.contact_email, status);
   }
-  const recipients = [...statusByContact.entries()].map(([email, status]) => ({ email, ...status }));
+  const allContactEmails = new Set([...statusByContact.keys(), ...maxSegmentByContact.keys()]);
+  const recipients = [...allContactEmails].map((email) => {
+    const status = statusByContact.get(email) ?? {
+      delivered: false,
+      opened: false,
+      clicked: false,
+      bounced: false,
+    };
+    const maxSegment = maxSegmentByContact.get(email);
+    return {
+      email,
+      ...status,
+      readDepthPct: maxSegment ? Math.round((maxSegment / 4) * 100) : null,
+    };
+  });
   const notOpened = recipients.filter((r) => r.delivered && !r.opened).map((r) => r.email);
   const notReceived = recipients.filter((r) => !r.delivered).map((r) => r.email);
 
@@ -165,6 +179,58 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
               <p className="text-2xl font-semibold text-neutral-900">{s.count}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-medium text-neutral-900">Recipients</h2>
+        <p className="text-xs text-neutral-500">Per-recipient status and estimated read depth.</p>
+        <div className="max-h-96 overflow-y-auto overflow-x-auto rounded-lg border border-neutral-200 bg-white">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 border-b border-neutral-200 bg-neutral-50 text-left text-neutral-500">
+              <tr>
+                <th className="px-4 py-2 font-medium">Recipient</th>
+                <th className="px-4 py-2 font-medium">Delivered</th>
+                <th className="px-4 py-2 font-medium">Opened</th>
+                <th className="px-4 py-2 font-medium">Clicked</th>
+                <th className="px-4 py-2 font-medium">Read depth</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {[...recipients]
+                .sort((a, b) => (b.readDepthPct ?? -1) - (a.readDepthPct ?? -1))
+                .map((r) => (
+                  <tr key={r.email}>
+                    <td className="px-4 py-2 text-neutral-700">{r.email}</td>
+                    <td className="px-4 py-2 text-neutral-500">{r.bounced ? "bounced" : r.delivered ? "yes" : "—"}</td>
+                    <td className="px-4 py-2 text-neutral-500">{r.opened ? "yes" : "—"}</td>
+                    <td className="px-4 py-2 text-neutral-500">{r.clicked ? "yes" : "—"}</td>
+                    <td className="px-4 py-2 text-neutral-500">
+                      {r.readDepthPct !== null ? (
+                        <span className="inline-flex items-center gap-2">
+                          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-neutral-100">
+                            <span
+                              className="block h-full rounded-full bg-neutral-900"
+                              style={{ width: `${r.readDepthPct}%` }}
+                            />
+                          </span>
+                          {r.readDepthPct}%
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              {recipients.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-neutral-500">
+                    No recipient activity recorded yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 

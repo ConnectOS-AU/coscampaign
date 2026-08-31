@@ -3,9 +3,13 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import EmailEditor, { type EditorRef, type EmailEditorProps } from "react-email-editor";
-import type { Campaign } from "@/lib/types";
+import type { Campaign, EmailTemplate, LibraryImage } from "@/lib/types";
 import type { SendGridList, SendGridSegment, Sender, SuppressionGroup } from "@/lib/sendgrid";
 import { saveCampaignDraft } from "../../actions";
+import { saveTemplate } from "../../../templates/actions";
+import { ImagePickerModal } from "./image-picker-modal";
+
+type TemplateOption = Pick<EmailTemplate, "id" | "name" | "unlayer_design_json">;
 
 type Props = {
   campaign: Campaign;
@@ -13,11 +17,26 @@ type Props = {
   segments: SendGridSegment[];
   senders: Sender[];
   suppressionGroups: SuppressionGroup[];
+  templates: TemplateOption[];
+  libraryImages: LibraryImage[];
 };
 
-export function CampaignEditor({ campaign, lists, segments, senders, suppressionGroups }: Props) {
+type ImageUploadDone = (result: { progress?: number; url?: string }) => void;
+type SelectImageDone = (result: { url: string }) => void;
+
+export function CampaignEditor({
+  campaign,
+  lists,
+  segments,
+  senders,
+  suppressionGroups,
+  templates,
+  libraryImages,
+}: Props) {
   const router = useRouter();
   const editorRef = useRef<EditorRef>(null);
+  const [selectImageDone, setSelectImageDone] = useState<SelectImageDone | null>(null);
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   const [name, setName] = useState(campaign.name);
   const [subject, setSubject] = useState(campaign.subject ?? "");
@@ -41,6 +60,29 @@ export function CampaignEditor({ campaign, lists, segments, senders, suppression
     if (campaign.unlayer_design_json) {
       unlayer.loadDesign(campaign.unlayer_design_json as never);
     }
+
+    // Route the built-in "Upload Image" action through our own storage so
+    // every image used in a campaign is also added to the shared library.
+    unlayer.registerCallback("image", (file: { attachments: File[] }, done: ImageUploadDone) => {
+      const formData = new FormData();
+      formData.append("file", file.attachments[0]);
+
+      fetch("/api/images", { method: "POST", body: formData })
+        .then((res) => res.json())
+        .then((body) => {
+          if (body.image?.public_url) {
+            done({ progress: 100, url: body.image.public_url });
+          }
+        })
+        .catch(() => {
+          // Leave the upload widget as-is; the user can retry.
+        });
+    });
+
+    // Replace the built-in "Select Image" action with our library picker.
+    unlayer.registerCallback("selectImage", (_data: unknown, done: SelectImageDone) => {
+      setSelectImageDone(() => done);
+    });
   };
 
   function exportEditorState(): Promise<{ design: unknown; html: string }> {
@@ -139,6 +181,31 @@ export function CampaignEditor({ campaign, lists, segments, senders, suppression
     }
   }
 
+  async function handleSaveAsTemplate() {
+    const templateName = window.prompt("Template name:", name);
+    if (!templateName) return;
+
+    setSavingTemplate(true);
+    setMessage(null);
+    try {
+      const { design, html } = await exportEditorState();
+      await saveTemplate({ name: templateName, unlayer_design_json: design, html_content: html });
+      setMessage({ type: "success", text: `Saved template "${templateName}".` });
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Failed to save template" });
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  function handleLoadTemplate(templateId: string) {
+    if (!templateId) return;
+    const template = templates.find((t) => t.id === templateId);
+    if (!template || !editorRef.current?.editor) return;
+    if (!window.confirm(`Load "${template.name}"? This replaces the current design in the editor.`)) return;
+    editorRef.current.editor.loadDesign(template.unlayer_design_json as never);
+  }
+
   function toggleList(id: string) {
     setSelectedListIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
@@ -156,6 +223,26 @@ export function CampaignEditor({ campaign, lists, segments, senders, suppression
           className="w-full max-w-md rounded-md border border-transparent bg-transparent px-1 text-2xl font-semibold text-neutral-900 hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
         />
         <div className="flex items-center gap-2">
+          <select
+            value=""
+            onChange={(e) => handleLoadTemplate(e.target.value)}
+            disabled={templates.length === 0}
+            className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-700 disabled:opacity-50"
+          >
+            <option value="">Load template...</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleSaveAsTemplate}
+            disabled={savingTemplate}
+            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+          >
+            {savingTemplate ? "Saving..." : "Save as template"}
+          </button>
           <button
             onClick={handleSaveDraft}
             disabled={saving}
@@ -281,6 +368,17 @@ export function CampaignEditor({ campaign, lists, segments, senders, suppression
       <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
         <EmailEditor ref={editorRef} onLoad={onLoad} minHeight="800px" />
       </div>
+
+      {selectImageDone && (
+        <ImagePickerModal
+          images={libraryImages}
+          onSelect={(url) => {
+            selectImageDone({ url });
+            setSelectImageDone(null);
+          }}
+          onClose={() => setSelectImageDone(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { listContactLists, listSegments, listVerifiedSenders, listSuppressionGroups } from "@/lib/sendgrid";
-import type { Campaign } from "@/lib/types";
+import type { Campaign, EmailTemplate, LibraryImage } from "@/lib/types";
 import { CampaignEditor } from "./campaign-editor";
 
 export default async function EditCampaignPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,12 +24,19 @@ export default async function EditCampaignPage({ params }: { params: Promise<{ i
 
   // These fail independently of the DB fetch above; if SendGrid isn't
   // configured yet we still want the editor to load so drafting can start.
-  const [lists, segments, senders, suppressionGroups] = await Promise.all([
-    listContactLists().catch(() => []),
-    listSegments().catch(() => []),
-    listVerifiedSenders().catch(() => []),
-    listSuppressionGroups().catch(() => []),
-  ]);
+  const [lists, segments, senders, suppressionGroups, { data: templates }, { data: libraryImages }] =
+    await Promise.all([
+      listContactLists().catch(() => []),
+      listSegments().catch(() => []),
+      listVerifiedSenders().catch(() => []),
+      listSuppressionGroups().catch(() => []),
+      supabase
+        .from("marketing_email_templates")
+        .select("id, name, unlayer_design_json")
+        .order("name")
+        .returns<Pick<EmailTemplate, "id" | "name" | "unlayer_design_json">[]>(),
+      supabase.from("marketing_email_image_library").select("*").order("name").returns<LibraryImage[]>(),
+    ]);
 
   return (
     <CampaignEditor
@@ -38,6 +45,8 @@ export default async function EditCampaignPage({ params }: { params: Promise<{ i
       segments={segments}
       senders={senders}
       suppressionGroups={suppressionGroups}
+      templates={templates ?? []}
+      libraryImages={libraryImages ?? []}
     />
   );
 }

@@ -3,7 +3,14 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Recipient = { email: string; delivered: boolean; opened: boolean; clicked: boolean; bounced: boolean };
+type Recipient = {
+  email: string;
+  delivered: boolean;
+  opened: boolean;
+  clicked: boolean;
+  bounced: boolean;
+  readDepthPct: number | null;
+};
 
 type Props = {
   campaignId: string;
@@ -22,9 +29,10 @@ export function ResendPanel({ campaignId, recipients, notOpened, notReceived }: 
   const [error, setError] = useState<string | null>(null);
 
   const statusLabel = (r: Recipient) => {
+    const readSuffix = r.readDepthPct !== null ? ` · read ${r.readDepthPct}%` : "";
     if (r.bounced) return "bounced";
-    if (r.clicked) return "clicked";
-    if (r.opened) return "opened";
+    if (r.clicked) return `clicked${readSuffix}`;
+    if (r.opened) return `opened${readSuffix}`;
     if (r.delivered) return "delivered, not opened";
     return "not received";
   };
