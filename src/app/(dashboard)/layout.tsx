@@ -13,6 +13,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const canManageUsers = hasPermission(session, "manage_users");
+  const canManageSurveys = hasPermission(session, "manage_surveys");
 
   return (
     <div className="min-h-screen bg-neutral-50">
@@ -26,12 +27,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Link href="/campaigns" className="text-sm text-neutral-600 hover:text-neutral-900">
               Campaigns
             </Link>
+            <Link href="/calendar" className="text-sm text-neutral-600 hover:text-neutral-900">
+              Calendar
+            </Link>
             <Link href="/templates" className="text-sm text-neutral-600 hover:text-neutral-900">
               Templates
             </Link>
             <Link href="/images" className="text-sm text-neutral-600 hover:text-neutral-900">
               Images
             </Link>
+            {canManageSurveys && (
+              <Link href="/surveys" className="text-sm text-neutral-600 hover:text-neutral-900">
+                Surveys
+              </Link>
+            )}
             {canManageUsers && (
               <Link href="/users" className="text-sm text-neutral-600 hover:text-neutral-900">
                 Users

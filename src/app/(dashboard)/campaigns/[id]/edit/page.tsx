@@ -2,7 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
-import { listContactLists, listSegments, listVerifiedSenders, listSuppressionGroups } from "@/lib/sendgrid";
+import { listVerifiedSenders, listSuppressionGroups } from "@/lib/sendgrid";
+import { emptyEmployeeFilter, getEmployeeFilterOptions } from "@/lib/employees";
 import type { Campaign, EmailTemplate, LibraryImage } from "@/lib/types";
 import { CampaignEditor } from "./campaign-editor";
 
@@ -36,12 +37,11 @@ export default async function EditCampaignPage({ params }: { params: Promise<{ i
 
   // These fail independently of the DB fetch above; if SendGrid isn't
   // configured yet we still want the editor to load so drafting can start.
-  const [lists, segments, senders, suppressionGroups, { data: templates }, { data: libraryImages }] =
+  const [senders, suppressionGroups, initialEmployeeOptions, { data: templates }, { data: libraryImages }] =
     await Promise.all([
-      listContactLists().catch(() => []),
-      listSegments().catch(() => []),
       listVerifiedSenders().catch(() => []),
       listSuppressionGroups().catch(() => []),
+      getEmployeeFilterOptions(campaign.recipient_filter ?? emptyEmployeeFilter()),
       supabase
         .from("marketing_email_templates")
         .select("id, name, unlayer_design_json")
@@ -53,10 +53,9 @@ export default async function EditCampaignPage({ params }: { params: Promise<{ i
   return (
     <CampaignEditor
       campaign={campaign}
-      lists={lists}
-      segments={segments}
       senders={senders}
       suppressionGroups={suppressionGroups}
+      initialEmployeeOptions={initialEmployeeOptions}
       templates={templates ?? []}
       libraryImages={libraryImages ?? []}
     />

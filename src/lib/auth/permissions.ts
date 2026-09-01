@@ -1,6 +1,11 @@
 import type { Session } from "./session";
 
-export type PermissionKey = "manage_users" | "manage_campaigns" | "manage_templates" | "manage_images";
+export type PermissionKey =
+  | "manage_users"
+  | "manage_campaigns"
+  | "manage_templates"
+  | "manage_images"
+  | "manage_surveys";
 
 export function hasPermission(session: Session | null, key: PermissionKey): boolean {
   return session?.permissions.includes(key) ?? false;

@@ -4,19 +4,20 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import EmailEditor, { type EditorRef, type EmailEditorProps } from "react-email-editor";
 import type { Campaign, EmailTemplate, LibraryImage } from "@/lib/types";
-import type { SendGridList, SendGridSegment, Sender, SuppressionGroup } from "@/lib/sendgrid";
+import type { Sender, SuppressionGroup } from "@/lib/sendgrid";
+import { emptyEmployeeFilter, type EmployeeFilterOptions } from "@/lib/employees";
 import { saveCampaignDraft } from "../../actions";
 import { saveTemplate } from "../../../templates/actions";
 import { ImagePickerModal } from "./image-picker-modal";
+import { EmployeeRecipientPicker } from "./employee-recipient-picker";
 
 type TemplateOption = Pick<EmailTemplate, "id" | "name" | "unlayer_design_json">;
 
 type Props = {
   campaign: Campaign;
-  lists: SendGridList[];
-  segments: SendGridSegment[];
   senders: Sender[];
   suppressionGroups: SuppressionGroup[];
+  initialEmployeeOptions: EmployeeFilterOptions;
   templates: TemplateOption[];
   libraryImages: LibraryImage[];
 };
@@ -26,10 +27,9 @@ type SelectImageDone = (result: { url: string }) => void;
 
 export function CampaignEditor({
   campaign,
-  lists,
-  segments,
   senders,
   suppressionGroups,
+  initialEmployeeOptions,
   templates,
   libraryImages,
 }: Props) {
@@ -43,10 +43,8 @@ export function CampaignEditor({
   const [senderId, setSenderId] = useState(
     senders.find((s) => s.from_email === campaign.from_email)?.id.toString() ?? "",
   );
-  const [selectedListIds, setSelectedListIds] = useState<string[]>(campaign.sendgrid_list_ids ?? []);
-  const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>(
-    campaign.sendgrid_segment_ids ?? [],
-  );
+  const [recipientFilter, setRecipientFilter] = useState(campaign.recipient_filter ?? emptyEmployeeFilter());
+  const [matchingCount, setMatchingCount] = useState(initialEmployeeOptions.matchingCount);
   const [suppressionGroupId, setSuppressionGroupId] = useState(
     campaign.sendgrid_suppression_group_id?.toString() ??
       suppressionGroups.find((g) => g.is_default)?.id.toString() ??
@@ -108,8 +106,7 @@ export function CampaignEditor({
         from_email: senders.find((s) => s.id.toString() === senderId)?.from_email ?? "",
         html_content: html,
         unlayer_design_json: design,
-        sendgrid_list_ids: selectedListIds,
-        sendgrid_segment_ids: selectedSegmentIds,
+        recipient_filter: recipientFilter,
         sendgrid_suppression_group_id: suppressionGroupId ? Number(suppressionGroupId) : null,
       });
       setMessage({ type: "success", text: "Draft saved." });
@@ -129,8 +126,9 @@ export function CampaignEditor({
       setMessage({ type: "error", text: "Choose a verified sender before sending." });
       return;
     }
-    if (selectedListIds.length === 0 && selectedSegmentIds.length === 0) {
-      setMessage({ type: "error", text: "Select at least one list or segment." });
+    const isResend = Boolean(campaign.resend_of_campaign_id);
+    if (!isResend && matchingCount === 0) {
+      setMessage({ type: "error", text: "No employees match the current recipient filters." });
       return;
     }
     if (!suppressionGroupId) {
@@ -157,8 +155,7 @@ export function CampaignEditor({
         from_email: senders.find((s) => s.id.toString() === senderId)?.from_email ?? "",
         html_content: html,
         unlayer_design_json: design,
-        sendgrid_list_ids: selectedListIds,
-        sendgrid_segment_ids: selectedSegmentIds,
+        recipient_filter: recipientFilter,
         sendgrid_suppression_group_id: suppressionGroupId ? Number(suppressionGroupId) : null,
       });
 
@@ -204,14 +201,6 @@ export function CampaignEditor({
     if (!template || !editorRef.current?.editor) return;
     if (!window.confirm(`Load "${template.name}"? This replaces the current design in the editor.`)) return;
     editorRef.current.editor.loadDesign(template.unlayer_design_json as never);
-  }
-
-  function toggleList(id: string) {
-    setSelectedListIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }
-
-  function toggleSegment(id: string) {
-    setSelectedSegmentIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
   return (
@@ -328,41 +317,22 @@ export function CampaignEditor({
           )}
         </div>
 
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-neutral-700">Lists ({selectedListIds.length} selected)</label>
-          <div className="max-h-32 overflow-y-auto rounded-md border border-neutral-300 p-2">
-            {lists.map((list) => (
-              <label key={list.id} className="flex items-center gap-2 py-1 text-sm">
-                <input
-                  type="checkbox"
-                  checked={selectedListIds.includes(list.id)}
-                  onChange={() => toggleList(list.id)}
-                />
-                {list.name} <span className="text-neutral-400">({list.contact_count})</span>
-              </label>
-            ))}
-            {lists.length === 0 && <p className="text-xs text-neutral-500">No lists found in SendGrid.</p>}
+        {campaign.resend_of_campaign_id ? (
+          <div className="rounded-lg border border-neutral-200 bg-white p-4 md:col-span-2">
+            <h3 className="text-sm font-medium text-neutral-700">Recipients</h3>
+            <p className="mt-1 text-sm text-neutral-500">
+              This is a resend draft — it targets the specific recipients selected when it was created, not
+              the employee filters below.
+            </p>
           </div>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-neutral-700">
-            Segments ({selectedSegmentIds.length} selected)
-          </label>
-          <div className="max-h-32 overflow-y-auto rounded-md border border-neutral-300 p-2">
-            {segments.map((segment) => (
-              <label key={segment.id} className="flex items-center gap-2 py-1 text-sm">
-                <input
-                  type="checkbox"
-                  checked={selectedSegmentIds.includes(segment.id)}
-                  onChange={() => toggleSegment(segment.id)}
-                />
-                {segment.name}
-              </label>
-            ))}
-            {segments.length === 0 && <p className="text-xs text-neutral-500">No segments found in SendGrid.</p>}
-          </div>
-        </div>
+        ) : (
+          <EmployeeRecipientPicker
+            value={recipientFilter}
+            onChange={setRecipientFilter}
+            initialOptions={initialEmployeeOptions}
+            onMatchingCountChange={setMatchingCount}
+          />
+        )}
       </div>
 
       <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">

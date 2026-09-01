@@ -1,3 +1,5 @@
+import type { EmployeeRecipientFilter } from "./employees";
+
 export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent";
 
 export type Campaign = {
@@ -14,6 +16,7 @@ export type Campaign = {
   sendgrid_segment_ids: string[];
   sendgrid_suppression_group_id: number | null;
   resend_of_campaign_id: string | null;
+  recipient_filter: EmployeeRecipientFilter | null;
   scheduled_at: string | null;
   sent_at: string | null;
   created_by: string | null;
@@ -89,6 +92,41 @@ export type LibraryImage = {
   public_url: string;
   created_by: string | null;
   created_at: string;
+};
+
+export type Survey = {
+  id: string;
+  name: string;
+  description: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SurveyQuestionType = "text" | "multiple_choice" | "rating";
+
+export type SurveyQuestion = {
+  id: string;
+  survey_id: string;
+  position: number;
+  question_text: string;
+  question_type: SurveyQuestionType;
+  options: string[] | null;
+  created_at: string;
+};
+
+export type SurveyResponse = {
+  id: string;
+  survey_id: string;
+  contact_email: string;
+  submitted_at: string;
+};
+
+export type SurveyAnswer = {
+  id: string;
+  response_id: string;
+  question_id: string;
+  answer_text: string | null;
 };
 
 export type CampaignFunnel = {

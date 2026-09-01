@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
-import { createSingleSend, updateSingleSend, scheduleSingleSend } from "@/lib/sendgrid";
+import { createSingleSend, updateSingleSend, scheduleSingleSend, createList, upsertContactsToList, waitForContactImport } from "@/lib/sendgrid";
 import { injectReadDepthPixels } from "@/lib/read-depth";
+import { emptyEmployeeFilter, resolveEmployeeEmails } from "@/lib/employees";
 import type { Campaign } from "@/lib/types";
 
 function extractLinks(html: string): string[] {
@@ -48,14 +49,57 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!senderId) {
     return NextResponse.json({ error: "senderId is required" }, { status: 400 });
   }
-  if ((campaign.sendgrid_list_ids?.length ?? 0) === 0 && (campaign.sendgrid_segment_ids?.length ?? 0) === 0) {
-    return NextResponse.json({ error: "Select at least one list or segment" }, { status: 400 });
-  }
   if (!campaign.sendgrid_suppression_group_id) {
     return NextResponse.json(
       { error: "An unsubscribe group is required by SendGrid before a send can be scheduled" },
       { status: 400 },
     );
+  }
+
+  // A resend draft already has a specific SendGrid list built from exact
+  // tracking-history-derived emails (non-openers etc.) -- that can't be
+  // expressed as an employee-directory filter, so it bypasses filter
+  // resolution entirely and reuses the list the resend flow already built.
+  const isResend = Boolean(campaign.resend_of_campaign_id);
+  let recipientListId: string;
+  let recipientCount: number;
+
+  if (isResend) {
+    const existingListId = campaign.sendgrid_list_ids?.[0];
+    if (!existingListId) {
+      return NextResponse.json({ error: "This resend draft is missing its recipient list" }, { status: 400 });
+    }
+    recipientListId = existingListId;
+    recipientCount = 0; // Already known from the resend step; not re-fetched here.
+  } else {
+    // Resolve recipients fresh from the employee directory at send time,
+    // rather than at the moment the filter was picked, so the roster is
+    // always current.
+    const emails = await resolveEmployeeEmails(campaign.recipient_filter ?? emptyEmployeeFilter());
+    if (emails.length === 0) {
+      return NextResponse.json({ error: "No employees match the current recipient filters" }, { status: 400 });
+    }
+
+    try {
+      const list = await createList(`${campaign.name} (${new Date().toISOString().slice(0, 10)})`);
+      const importJob = await upsertContactsToList(list.id, emails);
+      const importResult = await waitForContactImport(importJob.job_id);
+      if (importResult.status !== "completed") {
+        return NextResponse.json(
+          {
+            error: `SendGrid is still processing the recipient list (status: ${importResult.status}). Wait a moment and try sending again.`,
+          },
+          { status: 202 },
+        );
+      }
+      recipientListId = list.id;
+      recipientCount = emails.length;
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Failed to prepare recipient list" },
+        { status: 502 },
+      );
+    }
   }
 
   try {
@@ -73,8 +117,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await updateSingleSend(singleSend.id, {
       name: campaign.name,
       send_to: {
-        list_ids: campaign.sendgrid_list_ids,
-        segment_ids: campaign.sendgrid_segment_ids,
+        list_ids: [recipientListId],
       },
       email_config: {
         subject: campaign.subject,
@@ -92,6 +135,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       .from("marketing_email_campaigns")
       .update({
         sendgrid_singlesend_id: singleSend.id,
+        sendgrid_list_ids: [recipientListId],
         status: sendAt === "now" ? "sending" : "scheduled",
         scheduled_at: sendAt === "now" ? new Date().toISOString() : sendAt,
         sent_at: sendAt === "now" ? new Date().toISOString() : null,
@@ -112,7 +156,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         );
     }
 
-    return NextResponse.json({ singleSendId: singleSend.id, status: sendAt === "now" ? "sending" : "scheduled" });
+    return NextResponse.json({
+      singleSendId: singleSend.id,
+      status: sendAt === "now" ? "sending" : "scheduled",
+      recipientCount,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to send campaign" },

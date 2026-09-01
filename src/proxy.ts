@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { resolveSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhooks", "/api/track"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhooks", "/api/track", "/s/", "/api/surveys"];
 
 export async function proxy(request: NextRequest) {
   const isPublicPath = PUBLIC_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));

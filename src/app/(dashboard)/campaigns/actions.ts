@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { requirePermission } from "@/lib/auth/permissions";
+import type { EmployeeRecipientFilter } from "@/lib/employees";
 
 export async function createCampaign() {
   const session = await getSession();
@@ -32,8 +33,7 @@ export type SaveCampaignDraftInput = {
   from_email: string;
   html_content: string;
   unlayer_design_json: unknown;
-  sendgrid_list_ids: string[];
-  sendgrid_segment_ids: string[];
+  recipient_filter: EmployeeRecipientFilter;
   sendgrid_suppression_group_id: number | null;
 };
 
@@ -51,8 +51,7 @@ export async function saveCampaignDraft(input: SaveCampaignDraftInput) {
       from_email: input.from_email,
       html_content: input.html_content,
       unlayer_design_json: input.unlayer_design_json,
-      sendgrid_list_ids: input.sendgrid_list_ids,
-      sendgrid_segment_ids: input.sendgrid_segment_ids,
+      recipient_filter: input.recipient_filter,
       sendgrid_suppression_group_id: input.sendgrid_suppression_group_id,
       updated_at: new Date().toISOString(),
     })
