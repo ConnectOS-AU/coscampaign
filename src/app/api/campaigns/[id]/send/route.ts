@@ -10,9 +10,13 @@ import type { Campaign } from "@/lib/types";
 
 /** Creates a fresh SendGrid list from an email set and waits for the import to finish. */
 async function buildSendGridList(name: string, emails: string[]) {
+  const startedAt = Date.now();
   const list = await createList(name);
   const importJob = await upsertContactsToList(list.id, emails);
   const importResult = await waitForContactImport(importJob.job_id);
+  console.log(
+    `[buildSendGridList] "${name}" (${emails.length} emails) -> ${importResult.status} in ${Date.now() - startedAt}ms`,
+  );
   return { list, importResult };
 }
 
@@ -104,6 +108,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       recipientListId = list.id;
       recipientCount = emails.length;
     } catch (err) {
+      console.error(`[campaigns/${id}/send] Failed to prepare recipient list:`, err);
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Failed to prepare recipient list" },
         { status: 502 },
@@ -128,6 +133,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       recipientListId = list.id;
       recipientCount = emails.length;
     } catch (err) {
+      console.error(`[campaigns/${id}/send] Failed to prepare recipient list:`, err);
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Failed to prepare recipient list" },
         { status: 502 },
@@ -158,6 +164,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       recipientListId = list.id;
       recipientCount = emails.length;
     } catch (err) {
+      console.error(`[campaigns/${id}/send] Failed to prepare recipient list:`, err);
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Failed to prepare recipient list" },
         { status: 502 },
@@ -165,6 +172,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
+  const sendStartedAt = Date.now();
   try {
     const singleSend = await createSingleSend({ name: campaign.name });
 
@@ -219,12 +227,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         );
     }
 
+    console.log(`[campaigns/${id}/send] Completed in ${Date.now() - sendStartedAt}ms`);
     return NextResponse.json({
       singleSendId: singleSend.id,
       status: sendAt === "now" ? "sending" : "scheduled",
       recipientCount,
     });
   } catch (err) {
+    console.error(
+      `[campaigns/${id}/send] Failed after ${Date.now() - sendStartedAt}ms creating/scheduling the single send:`,
+      err,
+    );
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to send campaign" },
       { status: 502 },
