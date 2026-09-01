@@ -8,9 +8,17 @@ import { emptyEmployeeFilter, resolveEmployeeEmails } from "@/lib/employees";
 import { resolveEventRegistrantEmails } from "@/lib/events";
 import type { Campaign } from "@/lib/types";
 
-/** Creates a fresh SendGrid list from an email set and waits for the import to finish. */
-async function buildSendGridList(name: string, emails: string[]) {
+/**
+ * Creates a fresh SendGrid list from an email set and waits for the import to
+ * finish. The list name is suffixed with a full timestamp + random fragment
+ * (not just the date) so retrying a send for the same campaign on the same
+ * day never collides with a list a previous attempt already created --
+ * SendGrid rejects `createList` outright with a 400 "list name is already in
+ * use" otherwise.
+ */
+async function buildSendGridList(baseName: string, emails: string[]) {
   const startedAt = Date.now();
+  const name = `${baseName} (${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)})`;
   const list = await createList(name);
   const importJob = await upsertContactsToList(list.id, emails);
   const importResult = await waitForContactImport(importJob.job_id);
@@ -93,10 +101,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     try {
-      const { list, importResult } = await buildSendGridList(
-        `${campaign.name} (${new Date().toISOString().slice(0, 10)})`,
-        emails,
-      );
+      const { list, importResult } = await buildSendGridList(campaign.name, emails);
       if (importResult.status !== "completed") {
         return NextResponse.json(
           {
@@ -118,10 +123,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const emails = campaign.individual_recipient_emails;
 
     try {
-      const { list, importResult } = await buildSendGridList(
-        `${campaign.name} (${new Date().toISOString().slice(0, 10)})`,
-        emails,
-      );
+      const { list, importResult } = await buildSendGridList(campaign.name, emails);
       if (importResult.status !== "completed") {
         return NextResponse.json(
           {
@@ -149,10 +151,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     try {
-      const { list, importResult } = await buildSendGridList(
-        `${campaign.name} (${new Date().toISOString().slice(0, 10)})`,
-        emails,
-      );
+      const { list, importResult } = await buildSendGridList(campaign.name, emails);
       if (importResult.status !== "completed") {
         return NextResponse.json(
           {

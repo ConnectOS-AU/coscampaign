@@ -37,7 +37,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   try {
-    const list = await createList(`Resend: ${original.name} (${new Date().toISOString().slice(0, 10)})`);
+    // Timestamp (not just date) + a random fragment so retrying a resend for
+    // the same campaign on the same day never collides with a list an
+    // earlier attempt already created (SendGrid rejects duplicate list names).
+    const list = await createList(
+      `Resend: ${original.name} (${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)})`,
+    );
 
     const importJob = await upsertContactsToList(list.id, emails);
     const importResult = await waitForContactImport(importJob.job_id);
