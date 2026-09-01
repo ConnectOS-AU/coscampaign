@@ -109,6 +109,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         { status: 502 },
       );
     }
+  } else if (campaign.individual_recipient_emails?.length) {
+    const emails = campaign.individual_recipient_emails;
+
+    try {
+      const { list, importResult } = await buildSendGridList(
+        `${campaign.name} (${new Date().toISOString().slice(0, 10)})`,
+        emails,
+      );
+      if (importResult.status !== "completed") {
+        return NextResponse.json(
+          {
+            error: `SendGrid is still processing the recipient list (status: ${importResult.status}). Wait a moment and try sending again.`,
+          },
+          { status: 202 },
+        );
+      }
+      recipientListId = list.id;
+      recipientCount = emails.length;
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Failed to prepare recipient list" },
+        { status: 502 },
+      );
+    }
   } else {
     // Resolve recipients fresh from the employee directory at send time,
     // rather than at the moment the filter was picked, so the roster is

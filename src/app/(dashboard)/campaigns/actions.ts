@@ -35,6 +35,7 @@ export type SaveCampaignDraftInput = {
   unlayer_design_json: unknown;
   recipient_filter: EmployeeRecipientFilter;
   event_id: string | null;
+  individual_recipient_emails: string[] | null;
   sendgrid_suppression_group_id: number | null;
 };
 
@@ -54,6 +55,7 @@ export async function saveCampaignDraft(input: SaveCampaignDraftInput) {
       unlayer_design_json: input.unlayer_design_json,
       recipient_filter: input.recipient_filter,
       event_id: input.event_id,
+      individual_recipient_emails: input.individual_recipient_emails,
       sendgrid_suppression_group_id: input.sendgrid_suppression_group_id,
       updated_at: new Date().toISOString(),
     })

@@ -10,6 +10,9 @@ import { saveCampaignDraft } from "../../actions";
 import { saveTemplate } from "../../../templates/actions";
 import { ImagePickerModal } from "./image-picker-modal";
 import { EmployeeRecipientPicker } from "./employee-recipient-picker";
+import { IndividualRecipientPicker, type IndividualRecipient } from "./individual-recipient-picker";
+
+type RecipientSource = "employees" | "event" | "individual";
 
 type TemplateOption = Pick<EmailTemplate, "id" | "name" | "unlayer_design_json">;
 
@@ -53,6 +56,12 @@ export function CampaignEditor({
   });
   const [matchingCount, setMatchingCount] = useState(initialEmployeeOptions.matchingCount);
   const [eventId, setEventId] = useState<string | null>(campaign.event_id);
+  const [individualRecipients, setIndividualRecipients] = useState<IndividualRecipient[]>(
+    (campaign.individual_recipient_emails ?? []).map((email) => ({ name: email, email })),
+  );
+  const [recipientSource, setRecipientSource] = useState<RecipientSource>(
+    campaign.event_id ? "event" : campaign.individual_recipient_emails?.length ? "individual" : "employees",
+  );
   const [suppressionGroupId, setSuppressionGroupId] = useState(
     campaign.sendgrid_suppression_group_id?.toString() ??
       suppressionGroups.find((g) => g.is_default)?.id.toString() ??
@@ -115,7 +124,9 @@ export function CampaignEditor({
         html_content: html,
         unlayer_design_json: design,
         recipient_filter: recipientFilter,
-        event_id: eventId,
+        event_id: recipientSource === "event" ? eventId : null,
+        individual_recipient_emails:
+          recipientSource === "individual" ? individualRecipients.map((p) => p.email) : null,
         sendgrid_suppression_group_id: suppressionGroupId ? Number(suppressionGroupId) : null,
       });
       setMessage({ type: "success", text: "Draft saved." });
@@ -137,10 +148,15 @@ export function CampaignEditor({
     }
     const isResend = Boolean(campaign.resend_of_campaign_id);
     if (!isResend) {
-      if (eventId) {
+      if (recipientSource === "event") {
         const registrantCount = eventOptions.find((e) => e.id === eventId)?.registrantCount ?? 0;
         if (registrantCount === 0) {
           setMessage({ type: "error", text: "This event has no registrants yet." });
+          return;
+        }
+      } else if (recipientSource === "individual") {
+        if (individualRecipients.length === 0) {
+          setMessage({ type: "error", text: "Select at least one individual recipient." });
           return;
         }
       } else if (matchingCount === 0) {
@@ -173,7 +189,9 @@ export function CampaignEditor({
         html_content: html,
         unlayer_design_json: design,
         recipient_filter: recipientFilter,
-        event_id: eventId,
+        event_id: recipientSource === "event" ? eventId : null,
+        individual_recipient_emails:
+          recipientSource === "individual" ? individualRecipients.map((p) => p.email) : null,
         sendgrid_suppression_group_id: suppressionGroupId ? Number(suppressionGroupId) : null,
       });
 
@@ -347,32 +365,49 @@ export function CampaignEditor({
           <div className="space-y-3 md:col-span-2">
             <div className="flex gap-4 text-sm text-neutral-700">
               <label className="flex items-center gap-2">
-                <input type="radio" checked={eventId === null} onChange={() => setEventId(null)} />
+                <input
+                  type="radio"
+                  checked={recipientSource === "employees"}
+                  onChange={() => setRecipientSource("employees")}
+                />
                 Employees
               </label>
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
-                  checked={eventId !== null}
+                  checked={recipientSource === "event"}
                   disabled={eventOptions.length === 0}
-                  onChange={() => setEventId(eventOptions[0]?.id ?? null)}
+                  onChange={() => {
+                    setRecipientSource("event");
+                    setEventId((current) => current ?? eventOptions[0]?.id ?? null);
+                  }}
                 />
                 Event registrants
               </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={recipientSource === "individual"}
+                  onChange={() => setRecipientSource("individual")}
+                />
+                Individual recipients
+              </label>
             </div>
 
-            {eventId === null ? (
+            {recipientSource === "employees" && (
               <EmployeeRecipientPicker
                 value={recipientFilter}
                 onChange={setRecipientFilter}
                 initialOptions={initialEmployeeOptions}
                 onMatchingCountChange={setMatchingCount}
               />
-            ) : (
+            )}
+
+            {recipientSource === "event" && (
               <div className="space-y-2 rounded-lg border border-neutral-200 bg-white p-4">
                 <label className="text-sm font-medium text-neutral-700">Event</label>
                 <select
-                  value={eventId}
+                  value={eventId ?? ""}
                   onChange={(e) => setEventId(e.target.value)}
                   className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
                 >
@@ -383,6 +418,10 @@ export function CampaignEditor({
                   ))}
                 </select>
               </div>
+            )}
+
+            {recipientSource === "individual" && (
+              <IndividualRecipientPicker value={individualRecipients} onChange={setIndividualRecipients} />
             )}
           </div>
         )}

@@ -89,3 +89,33 @@ export async function resolveEmployeeEmails(filter: EmployeeRecipientFilter): Pr
   }
   return [...emails];
 }
+
+export type EmployeeSearchResult = { name: string; email: string };
+
+/** Live directory search for hand-picking specific people as campaign recipients. */
+export async function searchEmployees(query: string): Promise<EmployeeSearchResult[]> {
+  // Strip characters meaningful to PostgREST's or=() filter syntax (comma
+  // separates conditions, parens nest them) so a search like "Smith, John"
+  // doesn't produce a malformed filter -- this is search input, not SQL, so
+  // there's no injection risk, just a robustness concern.
+  const trimmed = query.trim().replace(/[,()]/g, " ");
+  if (trimmed.length < 2) return [];
+
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("cosphere_active_employees")
+    .select("staff_name, office_email")
+    .eq("status", "ACTIVE")
+    .not("office_email", "is", null)
+    .or(`staff_name.ilike.%${trimmed}%,office_email.ilike.%${trimmed}%`)
+    .limit(20);
+
+  const seen = new Set<string>();
+  const results: EmployeeSearchResult[] = [];
+  for (const row of (data ?? []) as unknown as { staff_name: string | null; office_email: string | null }[]) {
+    if (!row.office_email || seen.has(row.office_email)) continue;
+    seen.add(row.office_email);
+    results.push({ name: row.staff_name ?? row.office_email, email: row.office_email });
+  }
+  return results;
+}

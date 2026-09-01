@@ -18,6 +18,7 @@ export type Campaign = {
   resend_of_campaign_id: string | null;
   recipient_filter: EmployeeRecipientFilter | null;
   event_id: string | null;
+  individual_recipient_emails: string[] | null;
   scheduled_at: string | null;
   sent_at: string | null;
   created_by: string | null;
