@@ -2,17 +2,18 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase";
+import { getSession } from "@/lib/auth/session";
+import { requirePermission } from "@/lib/auth/permissions";
 
 export async function createCampaign() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getSession();
+  requirePermission(session, "manage_campaigns");
 
+  const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("marketing_email_campaigns")
-    .insert({ name: "Untitled campaign", created_by: user?.id ?? null })
+    .insert({ name: "Untitled campaign", created_by: session?.userId ?? null })
     .select("id")
     .single();
 
@@ -37,8 +38,10 @@ export type SaveCampaignDraftInput = {
 };
 
 export async function saveCampaignDraft(input: SaveCampaignDraftInput) {
-  const supabase = await createClient();
+  const session = await getSession();
+  requirePermission(session, "manage_campaigns");
 
+  const supabase = createServiceRoleClient();
   const { error } = await supabase
     .from("marketing_email_campaigns")
     .update({
@@ -65,7 +68,10 @@ export async function saveCampaignDraft(input: SaveCampaignDraftInput) {
 }
 
 export async function deleteCampaign(id: string) {
-  const supabase = await createClient();
+  const session = await getSession();
+  requirePermission(session, "manage_campaigns");
+
+  const supabase = createServiceRoleClient();
   const { error } = await supabase
     .from("marketing_email_campaigns")
     .delete()

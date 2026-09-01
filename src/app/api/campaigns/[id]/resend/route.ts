@@ -1,18 +1,17 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase";
+import { getSession } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 import { createList, upsertContactsToList, waitForContactImport } from "@/lib/sendgrid";
 import type { Campaign } from "@/lib/types";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const session = await getSession();
+  if (!session || !hasPermission(session, "manage_campaigns")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const supabase = createServiceRoleClient();
 
   const body = (await request.json().catch(() => ({}))) as { emails?: unknown };
   const rawEmails: unknown[] = Array.isArray(body.emails) ? body.emails : [];
@@ -65,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         sendgrid_segment_ids: [],
         sendgrid_suppression_group_id: original.sendgrid_suppression_group_id,
         resend_of_campaign_id: original.id,
-        created_by: user.id,
+        created_by: session.userId,
       })
       .select("id")
       .single();

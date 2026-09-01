@@ -2,15 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addUser, deleteUser, setAdmin, setUserPassword } from "./actions";
+import type { PermissionKey } from "@/lib/auth/permissions";
+import { addUser, deleteUser, setUserPermissions, setUserPassword } from "./actions";
 
 type UserRow = {
   id: string;
   email: string;
   createdAt: string;
-  lastSignInAt: string | null;
-  isAdmin: boolean;
+  permissions: PermissionKey[];
 };
+
+type PermissionDef = { key: PermissionKey; description: string };
 
 function generatePassword(): string {
   const bytes = new Uint8Array(12);
@@ -18,11 +20,21 @@ function generatePassword(): string {
   return btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "").slice(0, 14);
 }
 
-export function UsersManager({ initialUsers, currentUserId }: { initialUsers: UserRow[]; currentUserId: string }) {
+export function UsersManager({
+  initialUsers,
+  allPermissions,
+  currentUserId,
+}: {
+  initialUsers: UserRow[];
+  allPermissions: PermissionDef[];
+  currentUserId: string;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState(generatePassword());
-  const [makeAdmin, setMakeAdmin] = useState(false);
+  const [newUserPermissions, setNewUserPermissions] = useState<Set<PermissionKey>>(
+    new Set(["manage_campaigns", "manage_templates", "manage_images"]),
+  );
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastCreated, setLastCreated] = useState<{ email: string; password: string } | null>(null);
@@ -34,11 +46,11 @@ export function UsersManager({ initialUsers, currentUserId }: { initialUsers: Us
     setAdding(true);
     setError(null);
     try {
-      await addUser({ email, password, makeAdmin });
+      await addUser({ email, password, permissions: [...newUserPermissions] });
       setLastCreated({ email, password });
       setEmail("");
       setPassword(generatePassword());
-      setMakeAdmin(false);
+      setNewUserPermissions(new Set(["manage_campaigns", "manage_templates", "manage_images"]));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add user");
@@ -47,14 +59,15 @@ export function UsersManager({ initialUsers, currentUserId }: { initialUsers: Us
     }
   }
 
-  async function handleToggleAdmin(userId: string, next: boolean) {
+  async function handleTogglePermission(userId: string, current: PermissionKey[], key: PermissionKey) {
+    const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
     setBusyUserId(userId);
     setError(null);
     try {
-      await setAdmin(userId, next);
+      await setUserPermissions(userId, next);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update admin access");
+      setError(err instanceof Error ? err.message : "Failed to update permissions");
     } finally {
       setBusyUserId(null);
     }
@@ -89,6 +102,15 @@ export function UsersManager({ initialUsers, currentUserId }: { initialUsers: Us
     }
   }
 
+  function toggleNewUserPermission(key: PermissionKey) {
+    setNewUserPermissions((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-6">
       <form onSubmit={handleAddUser} className="space-y-3 rounded-lg border border-neutral-200 bg-white p-4">
@@ -115,10 +137,6 @@ export function UsersManager({ initialUsers, currentUserId }: { initialUsers: Us
               className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-mono focus:border-neutral-500 focus:outline-none"
             />
           </div>
-          <label className="flex items-center gap-2 pb-2 text-sm text-neutral-700">
-            <input type="checkbox" checked={makeAdmin} onChange={(e) => setMakeAdmin(e.target.checked)} />
-            Admin
-          </label>
           <button
             type="submit"
             disabled={adding}
@@ -127,9 +145,24 @@ export function UsersManager({ initialUsers, currentUserId }: { initialUsers: Us
             {adding ? "Adding..." : "Add user"}
           </button>
         </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-neutral-700">Permissions</label>
+          <div className="flex flex-wrap gap-4">
+            {allPermissions.map((p) => (
+              <label key={p.key} className="flex items-center gap-2 text-sm text-neutral-700" title={p.description}>
+                <input
+                  type="checkbox"
+                  checked={newUserPermissions.has(p.key)}
+                  onChange={() => toggleNewUserPermission(p.key)}
+                />
+                {p.key}
+              </label>
+            ))}
+          </div>
+        </div>
         <p className="text-xs text-neutral-500">
-          Share this password with the user directly (Slack, in person) — email delivery isn&apos;t configured,
-          so there&apos;s no automatic invite email. They can change it after signing in.
+          Share this password with the user directly (Slack, in person) — there&apos;s no automatic invite
+          email. They can change it after signing in.
         </p>
         {lastCreated && (
           <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
@@ -145,33 +178,33 @@ export function UsersManager({ initialUsers, currentUserId }: { initialUsers: Us
           <thead className="border-b border-neutral-200 bg-neutral-50 text-left text-neutral-500">
             <tr>
               <th className="px-4 py-2 font-medium">Email</th>
-              <th className="px-4 py-2 font-medium">Admin</th>
-              <th className="px-4 py-2 font-medium">Last sign in</th>
+              <th className="px-4 py-2 font-medium">Permissions</th>
               <th className="px-4 py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
             {initialUsers.map((u) => (
               <tr key={u.id}>
-                <td className="px-4 py-2 text-neutral-700">
+                <td className="px-4 py-2 align-top text-neutral-700">
                   {u.email}
                   {u.id === currentUserId && <span className="ml-2 text-xs text-neutral-400">(you)</span>}
                 </td>
-                <td className="px-4 py-2">
-                  <label className="flex items-center gap-2 text-neutral-600">
-                    <input
-                      type="checkbox"
-                      checked={u.isAdmin}
-                      disabled={busyUserId === u.id || u.id === currentUserId}
-                      onChange={(e) => handleToggleAdmin(u.id, e.target.checked)}
-                    />
-                    {u.isAdmin ? "Admin" : "—"}
-                  </label>
+                <td className="px-4 py-2 align-top">
+                  <div className="flex flex-wrap gap-3">
+                    {allPermissions.map((p) => (
+                      <label key={p.key} className="flex items-center gap-1.5 text-neutral-600" title={p.description}>
+                        <input
+                          type="checkbox"
+                          checked={u.permissions.includes(p.key)}
+                          disabled={busyUserId === u.id}
+                          onChange={() => handleTogglePermission(u.id, u.permissions, p.key)}
+                        />
+                        {p.key}
+                      </label>
+                    ))}
+                  </div>
                 </td>
-                <td className="px-4 py-2 text-neutral-500">
-                  {u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString("en-AU") : "Never"}
-                </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2 align-top text-right">
                   <div className="flex items-center justify-end gap-3">
                     <button
                       disabled={busyUserId === u.id}

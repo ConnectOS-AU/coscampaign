@@ -2,21 +2,22 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase";
+import { getSession } from "@/lib/auth/session";
+import { requirePermission } from "@/lib/auth/permissions";
 
 export async function saveTemplate(input: { name: string; unlayer_design_json: unknown; html_content: string }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getSession();
+  requirePermission(session, "manage_templates");
 
+  const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("marketing_email_templates")
     .insert({
       name: input.name,
       unlayer_design_json: input.unlayer_design_json,
       html_content: input.html_content,
-      created_by: user?.id ?? null,
+      created_by: session?.userId ?? null,
     })
     .select("id, name")
     .single();
@@ -30,11 +31,10 @@ export async function saveTemplate(input: { name: string; unlayer_design_json: u
 }
 
 export async function createCampaignFromTemplate(templateId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getSession();
+  requirePermission(session, "manage_campaigns");
 
+  const supabase = createServiceRoleClient();
   const { data: template, error: fetchError } = await supabase
     .from("marketing_email_templates")
     .select("name, unlayer_design_json, html_content")
@@ -51,7 +51,7 @@ export async function createCampaignFromTemplate(templateId: string) {
       name: template.name,
       unlayer_design_json: template.unlayer_design_json,
       html_content: template.html_content,
-      created_by: user?.id ?? null,
+      created_by: session?.userId ?? null,
     })
     .select("id")
     .single();
@@ -64,7 +64,10 @@ export async function createCampaignFromTemplate(templateId: string) {
 }
 
 export async function deleteTemplate(id: string) {
-  const supabase = await createClient();
+  const session = await getSession();
+  requirePermission(session, "manage_templates");
+
+  const supabase = createServiceRoleClient();
   const { error } = await supabase.from("marketing_email_templates").delete().eq("id", id);
   if (error) {
     throw new Error(`Failed to delete template: ${error.message}`);

@@ -1,10 +1,10 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase";
 import type { EmailTemplate } from "@/lib/types";
 import { createCampaignFromTemplate } from "./actions";
 import { DeleteTemplateButton } from "./delete-template-button";
 
 export default async function TemplatesPage() {
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const { data: templates } = await supabase
     .from("marketing_email_templates")
     .select("id, name, description, created_at, updated_at")

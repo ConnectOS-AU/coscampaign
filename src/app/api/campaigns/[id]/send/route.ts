@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase";
+import { getSession } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 import { createSingleSend, updateSingleSend, scheduleSingleSend } from "@/lib/sendgrid";
 import { injectReadDepthPixels } from "@/lib/read-depth";
 import type { Campaign } from "@/lib/types";
@@ -18,14 +20,11 @@ function extractLinks(html: string): string[] {
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const session = await getSession();
+  if (!hasPermission(session, "manage_campaigns")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const supabase = createServiceRoleClient();
 
   const body = await request.json().catch(() => ({}));
   const senderId: number | undefined = body.senderId;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { EventWebhook, EventWebhookHeader } from "@sendgrid/eventwebhook";
-import { createServiceRoleClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 

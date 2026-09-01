@@ -1,21 +1,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { isCurrentUserAdmin } from "@/lib/admin";
+import { getSession } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 import { SignOutButton } from "@/components/sign-out-button";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getSession();
 
-  if (!user) {
+  if (!session) {
     redirect("/login");
   }
 
-  const admin = await isCurrentUserAdmin(supabase);
+  const canManageUsers = hasPermission(session, "manage_users");
 
   return (
     <div className="min-h-screen bg-neutral-50">
@@ -35,7 +32,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Link href="/images" className="text-sm text-neutral-600 hover:text-neutral-900">
               Images
             </Link>
-            {admin && (
+            {canManageUsers && (
               <Link href="/users" className="text-sm text-neutral-600 hover:text-neutral-900">
                 Users
               </Link>
@@ -45,7 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Link href="/security" className="text-sm text-neutral-600 hover:text-neutral-900">
               Security
             </Link>
-            <span className="text-sm text-neutral-500">{user.email}</span>
+            <span className="text-sm text-neutral-500">{session.email}</span>
             <SignOutButton />
           </div>
         </div>

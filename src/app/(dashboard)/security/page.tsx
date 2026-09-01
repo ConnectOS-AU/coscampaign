@@ -1,50 +1,111 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
-type Factor = { id: string; status: "verified" | "unverified" };
+type Enrolling = { factorId: string; qrCodeDataUrl: string; secret: string };
 
 export default function SecurityPage() {
-  const supabase = createClient();
+  return (
+    <div className="max-w-lg space-y-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-neutral-900">Security</h1>
+        <p className="text-sm text-neutral-500">Manage your password and two-factor authentication.</p>
+      </div>
+      <ChangePassword />
+      <TwoFactor />
+    </div>
+  );
+}
+
+function ChangePassword() {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Failed to change password");
+      setMessage("Password updated.");
+      setCurrentPassword("");
+      setNewPassword("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change password");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-neutral-200 bg-white p-5">
+      <h2 className="text-sm font-semibold text-neutral-900">Change password</h2>
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-neutral-700">Current password</label>
+        <input
+          type="password"
+          required
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-neutral-700">New password</label>
+        <input
+          type="password"
+          required
+          minLength={8}
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+        />
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {message && <p className="text-sm text-green-700">{message}</p>}
+      <button
+        type="submit"
+        disabled={busy}
+        className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+      >
+        {busy ? "Updating..." : "Update password"}
+      </button>
+    </form>
+  );
+}
+
+function TwoFactor() {
   const [loading, setLoading] = useState(true);
-  const [verifiedFactor, setVerifiedFactor] = useState<Factor | null>(null);
-  const [enrolling, setEnrolling] = useState<{ factorId: string; qrCode: string; secret: string } | null>(null);
+  const [verifiedFactor, setVerifiedFactor] = useState(false);
+  const [enrolling, setEnrolling] = useState<Enrolling | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function refreshFactors() {
+  async function refreshStatus() {
     setLoading(true);
-    const { data, error } = await supabase.auth.mfa.listFactors();
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
+    const res = await fetch("/api/auth/mfa/status");
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setVerifiedFactor(Boolean(body.enabled));
     }
-
-    // Clean up factors left behind by an abandoned enrollment (e.g. the user
-    // closed the tab mid-setup) -- they're unusable and otherwise block a
-    // fresh "Enable 2FA" attempt with a "friendly name already exists" error.
-    const abandoned = data.totp.filter((f) => f.status !== "verified");
-    if (abandoned.length > 0) {
-      const results = await Promise.all(abandoned.map((f) => supabase.auth.mfa.unenroll({ factorId: f.id })));
-      const failed = results.find((r) => r.error);
-      if (failed?.error) {
-        setError(`Couldn't clear a previous incomplete 2FA setup: ${failed.error.message}`);
-      }
-    }
-
-    const totp = data.totp.find((f) => f.status === "verified");
-    setVerifiedFactor(totp ? { id: totp.id, status: "verified" } : null);
     setLoading(false);
   }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch on mount
-    refreshFactors();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    refreshStatus();
   }, []);
 
   async function handleEnable() {
@@ -52,9 +113,10 @@ export default function SecurityPage() {
     setMessage(null);
     setBusy(true);
     try {
-      const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
-      if (error) throw error;
-      setEnrolling({ factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
+      const res = await fetch("/api/auth/mfa/enroll", { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Failed to start enrollment");
+      setEnrolling(body);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start enrollment");
     } finally {
@@ -63,9 +125,6 @@ export default function SecurityPage() {
   }
 
   async function handleCancelEnroll() {
-    if (enrolling) {
-      await supabase.auth.mfa.unenroll({ factorId: enrolling.factorId });
-    }
     setEnrolling(null);
     setCode("");
   }
@@ -76,22 +135,17 @@ export default function SecurityPage() {
     setBusy(true);
     setError(null);
     try {
-      const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
-        factorId: enrolling.factorId,
+      const res = await fetch("/api/auth/mfa/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ factorId: enrolling.factorId, code }),
       });
-      if (challengeError) throw challengeError;
-
-      const { error: verifyError } = await supabase.auth.mfa.verify({
-        factorId: enrolling.factorId,
-        challengeId: challenge.id,
-        code,
-      });
-      if (verifyError) throw verifyError;
-
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Invalid code — try again");
       setEnrolling(null);
       setCode("");
       setMessage("Two-factor authentication is now enabled.");
-      await refreshFactors();
+      setVerifiedFactor(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid code — try again");
     } finally {
@@ -100,15 +154,15 @@ export default function SecurityPage() {
   }
 
   async function handleDisable() {
-    if (!verifiedFactor) return;
     if (!window.confirm("Disable two-factor authentication for your account?")) return;
     setBusy(true);
     setError(null);
     try {
-      const { error } = await supabase.auth.mfa.unenroll({ factorId: verifiedFactor.id });
-      if (error) throw error;
+      const res = await fetch("/api/auth/mfa/disable", { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Failed to disable 2FA");
       setMessage("Two-factor authentication disabled.");
-      await refreshFactors();
+      setVerifiedFactor(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to disable 2FA");
     } finally {
@@ -117,11 +171,8 @@ export default function SecurityPage() {
   }
 
   return (
-    <div className="max-w-lg space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-neutral-900">Security</h1>
-        <p className="text-sm text-neutral-500">Two-factor authentication for your account.</p>
-      </div>
+    <div className="space-y-4">
+      <h2 className="text-sm font-semibold text-neutral-900">Two-factor authentication</h2>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       {message && <p className="text-sm text-green-700">{message}</p>}
@@ -135,7 +186,7 @@ export default function SecurityPage() {
             enter the secret manually.
           </p>
           {/* eslint-disable-next-line @next/next/no-img-element -- data: URI, not an optimizable asset */}
-          <img src={enrolling.qrCode} alt="Authenticator QR code" className="mx-auto h-48 w-48" />
+          <img src={enrolling.qrCodeDataUrl} alt="Authenticator QR code" className="mx-auto h-48 w-48" />
           <p className="break-all rounded-md bg-neutral-50 px-3 py-2 text-center font-mono text-xs text-neutral-600">
             {enrolling.secret}
           </p>

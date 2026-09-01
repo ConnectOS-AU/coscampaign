@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export function LoginForm() {
   const router = useRouter();
@@ -13,7 +12,7 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [needsMfa, setNeedsMfa] = useState(false);
   const [code, setCode] = useState("");
 
   function goToNext() {
@@ -26,32 +25,21 @@ export function LoginForm() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setLoading(false);
 
-    if (error) {
-      setLoading(false);
-      setError(error.message);
+    if (!res.ok) {
+      setError(body.error ?? "Failed to sign in");
       return;
     }
 
-    const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aalError) {
-      setLoading(false);
-      setError(aalError.message);
-      return;
-    }
-
-    if (aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
-      const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
-      const factor = factors?.totp.find((f) => f.status === "verified");
-      if (factorsError || !factor) {
-        setLoading(false);
-        setError(factorsError?.message ?? "No verified authenticator found for this account");
-        return;
-      }
-      setMfaFactorId(factor.id);
-      setLoading(false);
+    if (body.needsMfa) {
+      setNeedsMfa(true);
       return;
     }
 
@@ -60,35 +48,26 @@ export function LoginForm() {
 
   async function handleVerifyMfa(e: React.FormEvent) {
     e.preventDefault();
-    if (!mfaFactorId) return;
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
-      factorId: mfaFactorId,
+    const res = await fetch("/api/auth/mfa/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
     });
-    if (challengeError) {
-      setLoading(false);
-      setError(challengeError.message);
-      return;
-    }
-
-    const { error: verifyError } = await supabase.auth.mfa.verify({
-      factorId: mfaFactorId,
-      challengeId: challenge.id,
-      code,
-    });
+    const body = await res.json().catch(() => ({}));
     setLoading(false);
-    if (verifyError) {
-      setError(verifyError.message);
+
+    if (!res.ok) {
+      setError(body.error ?? "Invalid code");
       return;
     }
 
     goToNext();
   }
 
-  if (mfaFactorId) {
+  if (needsMfa) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
         <form

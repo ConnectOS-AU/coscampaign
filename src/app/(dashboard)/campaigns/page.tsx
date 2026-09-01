@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase";
+import { getSession } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 import type { Campaign } from "@/lib/types";
 import { createCampaign } from "./actions";
 
@@ -11,7 +13,10 @@ const STATUS_STYLES: Record<Campaign["status"], string> = {
 };
 
 export default async function CampaignsPage() {
-  const supabase = await createClient();
+  const session = await getSession();
+  const canManageCampaigns = hasPermission(session, "manage_campaigns");
+
+  const supabase = createServiceRoleClient();
   const { data: campaigns, error } = await supabase
     .from("marketing_email_campaigns")
     .select("id, name, subject, status, sent_at, scheduled_at, updated_at")
@@ -22,14 +27,16 @@ export default async function CampaignsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-neutral-900">Campaigns</h1>
-        <form action={createCampaign}>
-          <button
-            type="submit"
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            New campaign
-          </button>
-        </form>
+        {canManageCampaigns && (
+          <form action={createCampaign}>
+            <button
+              type="submit"
+              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+            >
+              New campaign
+            </button>
+          </form>
+        )}
       </div>
 
       {error && <p className="text-sm text-red-600">Failed to load campaigns: {error.message}</p>}

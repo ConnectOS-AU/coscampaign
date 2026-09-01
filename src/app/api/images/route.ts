@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase";
+import { getSession } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 
 const BUCKET = "campaign-images";
 
 export async function GET() {
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("marketing_email_image_library")
     .select("*")
@@ -17,13 +19,14 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const session = await getSession();
+  // Also allowed for anyone editing a campaign -- Unlayer's inline "Upload
+  // Image" action hits this same endpoint from the editor, not just the
+  // dedicated Images library page.
+  if (!hasPermission(session, "manage_images") && !hasPermission(session, "manage_campaigns")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const supabase = createServiceRoleClient();
 
   const formData = await request.formData().catch(() => null);
   const file = formData?.get("file");
@@ -58,7 +61,7 @@ export async function POST(request: Request) {
       name: typeof name === "string" && name.trim() ? name.trim() : file.name,
       storage_path: storagePath,
       public_url: publicUrl,
-      created_by: user.id,
+      created_by: session?.userId ?? null,
     })
     .select("*")
     .single();

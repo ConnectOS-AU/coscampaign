@@ -1,9 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase";
 import type { LibraryImage } from "@/lib/types";
 import { ImageLibraryManager } from "./image-library-manager";
 
 export default async function ImagesPage() {
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const { data: images } = await supabase
     .from("marketing_email_image_library")
     .select("*")

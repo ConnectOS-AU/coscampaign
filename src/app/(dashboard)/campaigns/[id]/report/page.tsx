@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase";
 import type { Campaign, CampaignLink, EngagementPixel, TrackingEvent } from "@/lib/types";
 import { READ_DEPTH_LABELS } from "@/lib/types";
 import { ResendPanel } from "./resend-panel";
@@ -22,7 +22,7 @@ type ActivityRow = {
 
 export default async function CampaignReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
 
   const [{ data: campaign }, { data: events }, { data: links }, { data: pixels }] = await Promise.all([
     supabase.from("marketing_email_campaigns").select("*").eq("id", id).single<Campaign>(),
