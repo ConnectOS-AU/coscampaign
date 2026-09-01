@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import type { Campaign } from "@/lib/types";
 import { createCampaign } from "./actions";
+import { DeleteCampaignButton } from "./delete-campaign-button";
 
 const STATUS_STYLES: Record<Campaign["status"], string> = {
   draft: "bg-neutral-100 text-neutral-700",
@@ -49,6 +50,7 @@ export default async function CampaignsPage() {
               <th className="px-4 py-3 font-medium">Subject</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Updated</th>
+              <th className="px-4 py-3 font-medium"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
@@ -71,11 +73,14 @@ export default async function CampaignsPage() {
                 <td className="px-4 py-3 text-neutral-500">
                   {new Date(c.updated_at).toLocaleString()}
                 </td>
+                <td className="px-4 py-3 text-right">
+                  {canManageCampaigns && c.status === "draft" && <DeleteCampaignButton id={c.id} />}
+                </td>
               </tr>
             ))}
             {campaigns?.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-neutral-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-neutral-500">
                   No campaigns yet. Create one to get started.
                 </td>
               </tr>

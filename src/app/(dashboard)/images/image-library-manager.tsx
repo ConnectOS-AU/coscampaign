@@ -7,6 +7,7 @@ export function ImageLibraryManager({ initialImages }: { initialImages: LibraryI
   const [images, setImages] = useState(initialImages);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -33,6 +34,7 @@ export function ImageLibraryManager({ initialImages }: { initialImages: LibraryI
       setImages((prev) => [body.image, ...prev]);
       if (nameInputRef.current) nameInputRef.current.value = "";
       if (fileInputRef.current) fileInputRef.current.value = "";
+      setSelectedFileName(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -67,7 +69,23 @@ export function ImageLibraryManager({ initialImages }: { initialImages: LibraryI
         </div>
         <div className="space-y-1">
           <label className="text-sm font-medium text-neutral-700">Image file</label>
-          <input ref={fileInputRef} type="file" accept="image/*" className="text-sm" />
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="image-file-input"
+              className="cursor-pointer rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
+            >
+              Choose file
+            </label>
+            <input
+              id="image-file-input"
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => setSelectedFileName(e.target.files?.[0]?.name ?? null)}
+            />
+            <span className="text-sm text-neutral-500">{selectedFileName ?? "No file chosen"}</span>
+          </div>
         </div>
         <button
           type="submit"
