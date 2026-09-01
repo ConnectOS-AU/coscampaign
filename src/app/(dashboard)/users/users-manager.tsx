@@ -169,7 +169,7 @@ export function UsersManager({ initialUsers, currentUserId }: { initialUsers: Us
                   </label>
                 </td>
                 <td className="px-4 py-2 text-neutral-500">
-                  {u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString() : "Never"}
+                  {u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString("en-AU") : "Never"}
                 </td>
                 <td className="px-4 py-2 text-right">
                   <div className="flex items-center justify-end gap-3">
