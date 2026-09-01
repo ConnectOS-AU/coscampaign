@@ -21,7 +21,11 @@ async function buildSendGridList(baseName: string, emails: string[]) {
   const name = `${baseName} (${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)})`;
   const list = await createList(name);
   const importJob = await upsertContactsToList(list.id, emails);
-  const importResult = await waitForContactImport(importJob.job_id);
+  // The default 20s timeout was observed timing out on SendGrid's async
+  // import queue even for a single contact -- 45s gives real imports enough
+  // room to finish while staying well under nginx/Cloudflare's proxy
+  // timeouts (both default to 60s+ for this stack).
+  const importResult = await waitForContactImport(importJob.job_id, { timeoutMs: 45_000 });
   console.log(
     `[buildSendGridList] "${name}" (${emails.length} emails) -> ${importResult.status} in ${Date.now() - startedAt}ms`,
   );
