@@ -41,7 +41,7 @@ export default async function EditCampaignPage({ params }: { params: Promise<{ i
     await Promise.all([
       listVerifiedSenders().catch(() => []),
       listSuppressionGroups().catch(() => []),
-      getEmployeeFilterOptions(campaign.recipient_filter ?? emptyEmployeeFilter()),
+      getEmployeeFilterOptions({ ...emptyEmployeeFilter(), ...campaign.recipient_filter }),
       supabase
         .from("marketing_email_templates")
         .select("id, name, unlayer_design_json")

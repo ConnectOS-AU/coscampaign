@@ -75,7 +75,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Resolve recipients fresh from the employee directory at send time,
     // rather than at the moment the filter was picked, so the roster is
     // always current.
-    const emails = await resolveEmployeeEmails(campaign.recipient_filter ?? emptyEmployeeFilter());
+    const emails = await resolveEmployeeEmails({ ...emptyEmployeeFilter(), ...campaign.recipient_filter });
     if (emails.length === 0) {
       return NextResponse.json({ error: "No employees match the current recipient filters" }, { status: 400 });
     }

@@ -43,7 +43,10 @@ export function CampaignEditor({
   const [senderId, setSenderId] = useState(
     senders.find((s) => s.from_email === campaign.from_email)?.id.toString() ?? "",
   );
-  const [recipientFilter, setRecipientFilter] = useState(campaign.recipient_filter ?? emptyEmployeeFilter());
+  const [recipientFilter, setRecipientFilter] = useState({
+    ...emptyEmployeeFilter(),
+    ...campaign.recipient_filter,
+  });
   const [matchingCount, setMatchingCount] = useState(initialEmployeeOptions.matchingCount);
   const [suppressionGroupId, setSuppressionGroupId] = useState(
     campaign.sendgrid_suppression_group_id?.toString() ??

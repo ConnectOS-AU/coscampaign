@@ -5,10 +5,18 @@ export type EmployeeRecipientFilter = {
   calendar_names: string[];
   client_provinces: string[];
   client_countries: string[];
+  /** Ignores every facet below and targets all active employees. */
+  override_all: boolean;
 };
 
 export function emptyEmployeeFilter(): EmployeeRecipientFilter {
-  return { client_names: [], calendar_names: [], client_provinces: [], client_countries: [] };
+  return {
+    client_names: [],
+    calendar_names: [],
+    client_provinces: [],
+    client_countries: [],
+    override_all: false,
+  };
 }
 
 const COLUMN_BY_FACET = {
@@ -31,6 +39,10 @@ const FACET_KEYS = Object.keys(COLUMN_BY_FACET) as FacetKey[];
 function queryEmployees(selectColumns: string, filter: EmployeeRecipientFilter, excludeFacet?: FacetKey) {
   const supabase = createServiceRoleClient();
   let query = supabase.from("cosphere_active_employees").select(selectColumns, { count: "exact" }).eq("status", "ACTIVE");
+
+  if (filter.override_all) {
+    return query;
+  }
 
   for (const facet of FACET_KEYS) {
     if (facet === excludeFacet) continue;
