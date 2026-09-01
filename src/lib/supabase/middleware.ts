@@ -39,5 +39,17 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // A session that has a verified authenticator but hasn't completed the
+  // MFA challenge yet is only aal1 -- block it from protected pages even
+  // though `user` is truthy, so a direct URL visit can't skip the 2FA step.
+  if (user && !isPublicPath) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal && aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("next", request.nextUrl.pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
   return response;
 }

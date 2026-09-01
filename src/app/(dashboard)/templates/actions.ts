@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,6 +27,40 @@ export async function saveTemplate(input: { name: string; unlayer_design_json: u
 
   revalidatePath("/templates");
   return data;
+}
+
+export async function createCampaignFromTemplate(templateId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: template, error: fetchError } = await supabase
+    .from("marketing_email_templates")
+    .select("name, unlayer_design_json, html_content")
+    .eq("id", templateId)
+    .single();
+
+  if (fetchError || !template) {
+    throw new Error("Template not found");
+  }
+
+  const { data: campaign, error: insertError } = await supabase
+    .from("marketing_email_campaigns")
+    .insert({
+      name: template.name,
+      unlayer_design_json: template.unlayer_design_json,
+      html_content: template.html_content,
+      created_by: user?.id ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (insertError) {
+    throw new Error(`Failed to create campaign from template: ${insertError.message}`);
+  }
+
+  redirect(`/campaigns/${campaign.id}/edit`);
 }
 
 export async function deleteTemplate(id: string) {
