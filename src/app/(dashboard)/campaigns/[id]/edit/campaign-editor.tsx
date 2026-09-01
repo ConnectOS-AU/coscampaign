@@ -195,15 +195,35 @@ export function CampaignEditor({
         sendgrid_suppression_group_id: suppressionGroupId ? Number(suppressionGroupId) : null,
       });
 
-      const res = await fetch(`/api/campaigns/${campaign.id}/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ senderId: Number(senderId), sendAt }),
-      });
+      const postSend = () =>
+        fetch(`/api/campaigns/${campaign.id}/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ senderId: Number(senderId), sendAt }),
+        });
 
-      if (!res.ok) {
+      // A 202 means SendGrid is still importing the recipient list into
+      // SendGrid (can take a while for brand-new contacts) -- retry a few
+      // times rather than making the user click Send repeatedly. Each retry
+      // reuses the same in-progress list server-side, so this is safe.
+      let res = await postSend();
+      let attempt = 0;
+      const maxAttempts = 10;
+      while (res.status === 202 && attempt < maxAttempts) {
+        attempt += 1;
+        setMessage({
+          type: "success",
+          text: `SendGrid is still preparing the recipient list -- checking again (${attempt}/${maxAttempts})...`,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 6000));
+        res = await postSend();
+      }
+
+      if (res.status === 202 || !res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `Send failed (${res.status})`);
+        throw new Error(
+          body.error ?? (res.status === 202 ? "SendGrid is still preparing the recipient list." : `Send failed (${res.status})`),
+        );
       }
 
       router.push(`/campaigns/${campaign.id}/report`);

@@ -44,6 +44,27 @@ export async function saveCampaignDraft(input: SaveCampaignDraftInput) {
   requirePermission(session, "manage_campaigns");
 
   const supabase = createServiceRoleClient();
+
+  // The send route builds a SendGrid list lazily and reuses it across
+  // retries (so a slow SendGrid import doesn't spawn a duplicate list on
+  // every retry -- see [id]/send/route.ts). That reuse is only valid while
+  // the recipient selection hasn't changed since the list was built, so
+  // clear the in-progress list whenever this save actually changes who the
+  // campaign targets. Resend drafts are exempt -- their list is fixed at
+  // creation and never rebuilt.
+  const { data: current } = await supabase
+    .from("marketing_email_campaigns")
+    .select("resend_of_campaign_id, recipient_filter, event_id, individual_recipient_emails")
+    .eq("id", input.id)
+    .maybeSingle();
+
+  const recipientsChanged =
+    !current?.resend_of_campaign_id &&
+    (JSON.stringify(current?.recipient_filter ?? null) !== JSON.stringify(input.recipient_filter) ||
+      current?.event_id !== input.event_id ||
+      JSON.stringify(current?.individual_recipient_emails ?? null) !==
+        JSON.stringify(input.individual_recipient_emails));
+
   const { error } = await supabase
     .from("marketing_email_campaigns")
     .update({
@@ -58,6 +79,7 @@ export async function saveCampaignDraft(input: SaveCampaignDraftInput) {
       individual_recipient_emails: input.individual_recipient_emails,
       sendgrid_suppression_group_id: input.sendgrid_suppression_group_id,
       updated_at: new Date().toISOString(),
+      ...(recipientsChanged ? { sendgrid_list_ids: [] } : {}),
     })
     .eq("id", input.id)
     .eq("status", "draft");

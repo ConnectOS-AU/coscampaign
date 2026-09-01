@@ -149,6 +149,10 @@ export async function createList(name: string): Promise<SendGridList> {
   });
 }
 
+export async function getList(id: string): Promise<SendGridList> {
+  return sgFetch<SendGridList>(`/marketing/lists/${id}`);
+}
+
 export type ContactImportJob = {
   job_id: string;
 };

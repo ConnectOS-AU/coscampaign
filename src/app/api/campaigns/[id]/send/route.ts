@@ -2,34 +2,52 @@ import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
-import { createSingleSend, updateSingleSend, scheduleSingleSend, createList, upsertContactsToList, waitForContactImport } from "@/lib/sendgrid";
+import { createSingleSend, updateSingleSend, scheduleSingleSend, createList, upsertContactsToList, getList } from "@/lib/sendgrid";
 import { injectReadDepthPixels } from "@/lib/read-depth";
 import { emptyEmployeeFilter, resolveEmployeeEmails } from "@/lib/employees";
 import { resolveEventRegistrantEmails } from "@/lib/events";
 import type { Campaign } from "@/lib/types";
 
+const STILL_PREPARING_MESSAGE =
+  "SendGrid is still preparing the recipient list -- this can take a minute for brand-new contacts. Try sending again shortly.";
+
 /**
- * Creates a fresh SendGrid list from an email set and waits for the import to
- * finish. The list name is suffixed with a full timestamp + random fragment
- * (not just the date) so retrying a send for the same campaign on the same
- * day never collides with a list a previous attempt already created --
- * SendGrid rejects `createList` outright with a 400 "list name is already in
- * use" otherwise.
+ * Ensures a SendGrid list has (at least) the given emails, reusing a list a
+ * previous attempt already started building for this campaign instead of
+ * creating a new one every retry. SendGrid's contact import is async and can
+ * occasionally take well over a minute, so blocking the request on it isn't
+ * reliable -- instead, the first call kicks off the import and returns
+ * "not ready" immediately, and a retry checks the *same* list rather than
+ * starting a duplicate (which previously built up a real backlog of
+ * abandoned lists in the account).
  */
-async function buildSendGridList(baseName: string, emails: string[]) {
-  const startedAt = Date.now();
+async function ensureRecipientList(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  campaignId: string,
+  baseName: string,
+  existingListId: string | undefined,
+  emails: string[],
+): Promise<{ ready: boolean; listId: string }> {
+  if (existingListId) {
+    const list = await getList(existingListId);
+    return { ready: list.contact_count >= emails.length, listId: existingListId };
+  }
+
   const name = `${baseName} (${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)})`;
   const list = await createList(name);
-  const importJob = await upsertContactsToList(list.id, emails);
-  // The default 20s timeout was observed timing out on SendGrid's async
-  // import queue even for a single contact -- 45s gives real imports enough
-  // room to finish while staying well under nginx/Cloudflare's proxy
-  // timeouts (both default to 60s+ for this stack).
-  const importResult = await waitForContactImport(importJob.job_id, { timeoutMs: 45_000 });
-  console.log(
-    `[buildSendGridList] "${name}" (${emails.length} emails) -> ${importResult.status} in ${Date.now() - startedAt}ms`,
-  );
-  return { list, importResult };
+  await upsertContactsToList(list.id, emails);
+
+  // Persist immediately (before the import finishes) so a retry -- even a
+  // fast one -- reuses this list instead of racing to create another.
+  const { error } = await supabase
+    .from("marketing_email_campaigns")
+    .update({ sendgrid_list_ids: [list.id] })
+    .eq("id", campaignId);
+  if (error) {
+    console.error(`[campaigns/${campaignId}/send] Failed to persist in-progress list id:`, error);
+  }
+
+  return { ready: false, listId: list.id };
 }
 
 function extractLinks(html: string): string[] {
@@ -96,75 +114,39 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     recipientListId = existingListId;
     recipientCount = 0; // Already known from the resend step; not re-fetched here.
-  } else if (campaign.event_id) {
-    // All registrants (confirmed + waitlisted) are eligible -- the
-    // confirmed/waitlisted distinction only matters for event capacity.
-    const emails = await resolveEventRegistrantEmails(campaign.event_id);
-    if (emails.length === 0) {
-      return NextResponse.json({ error: "This event has no registrants yet" }, { status: 400 });
-    }
-
-    try {
-      const { list, importResult } = await buildSendGridList(campaign.name, emails);
-      if (importResult.status !== "completed") {
-        return NextResponse.json(
-          {
-            error: `SendGrid is still processing the recipient list (status: ${importResult.status}). Wait a moment and try sending again.`,
-          },
-          { status: 202 },
-        );
-      }
-      recipientListId = list.id;
-      recipientCount = emails.length;
-    } catch (err) {
-      console.error(`[campaigns/${id}/send] Failed to prepare recipient list:`, err);
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : "Failed to prepare recipient list" },
-        { status: 502 },
-      );
-    }
-  } else if (campaign.individual_recipient_emails?.length) {
-    const emails = campaign.individual_recipient_emails;
-
-    try {
-      const { list, importResult } = await buildSendGridList(campaign.name, emails);
-      if (importResult.status !== "completed") {
-        return NextResponse.json(
-          {
-            error: `SendGrid is still processing the recipient list (status: ${importResult.status}). Wait a moment and try sending again.`,
-          },
-          { status: 202 },
-        );
-      }
-      recipientListId = list.id;
-      recipientCount = emails.length;
-    } catch (err) {
-      console.error(`[campaigns/${id}/send] Failed to prepare recipient list:`, err);
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : "Failed to prepare recipient list" },
-        { status: 502 },
-      );
-    }
   } else {
-    // Resolve recipients fresh from the employee directory at send time,
-    // rather than at the moment the filter was picked, so the roster is
-    // always current.
-    const emails = await resolveEmployeeEmails({ ...emptyEmployeeFilter(), ...campaign.recipient_filter });
-    if (emails.length === 0) {
-      return NextResponse.json({ error: "No employees match the current recipient filters" }, { status: 400 });
+    let emails: string[];
+    if (campaign.event_id) {
+      // All registrants (confirmed + waitlisted) are eligible -- the
+      // confirmed/waitlisted distinction only matters for event capacity.
+      emails = await resolveEventRegistrantEmails(campaign.event_id);
+      if (emails.length === 0) {
+        return NextResponse.json({ error: "This event has no registrants yet" }, { status: 400 });
+      }
+    } else if (campaign.individual_recipient_emails?.length) {
+      emails = campaign.individual_recipient_emails;
+    } else {
+      // Resolve recipients fresh from the employee directory at send time,
+      // rather than at the moment the filter was picked, so the roster is
+      // always current.
+      emails = await resolveEmployeeEmails({ ...emptyEmployeeFilter(), ...campaign.recipient_filter });
+      if (emails.length === 0) {
+        return NextResponse.json({ error: "No employees match the current recipient filters" }, { status: 400 });
+      }
     }
 
     try {
-      const { list, importResult } = await buildSendGridList(campaign.name, emails);
-      if (importResult.status !== "completed") {
-        return NextResponse.json(
-          {
-            error: `SendGrid is still processing the recipient list (status: ${importResult.status}). Wait a moment and try sending again.`,
-          },
-          { status: 202 },
-        );
+      const { ready, listId } = await ensureRecipientList(
+        supabase,
+        id,
+        campaign.name,
+        campaign.sendgrid_list_ids?.[0],
+        emails,
+      );
+      if (!ready) {
+        return NextResponse.json({ error: STILL_PREPARING_MESSAGE }, { status: 202 });
       }
-      recipientListId = list.id;
+      recipientListId = listId;
       recipientCount = emails.length;
     } catch (err) {
       console.error(`[campaigns/${id}/send] Failed to prepare recipient list:`, err);
