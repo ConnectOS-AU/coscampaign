@@ -9,6 +9,7 @@ import { DeleteCampaignButton } from "./delete-campaign-button";
 
 const STATUS_STYLES: Record<Campaign["status"], string> = {
   draft: "bg-neutral-100 text-neutral-700",
+  queued: "bg-purple-100 text-purple-800",
   scheduled: "bg-amber-100 text-amber-800",
   sending: "bg-blue-100 text-blue-800",
   sent: "bg-green-100 text-green-800",
@@ -17,8 +18,9 @@ const STATUS_STYLES: Record<Campaign["status"], string> = {
 type CampaignRow = Pick<Campaign, "id" | "name" | "subject" | "status" | "sent_at" | "scheduled_at" | "updated_at">;
 
 const DRAFTS_GROUP = "Drafts";
+const QUEUED_GROUP = "Queued -- preparing to send";
 
-/** Groups by the date a campaign was sent (or is scheduled to send); drafts have neither, so they get their own group. */
+/** Groups by the date a campaign was sent (or is scheduled to send); drafts/queued have neither, so they get their own groups. */
 function groupCampaigns(campaigns: CampaignRow[]): [string, CampaignRow[]][] {
   const sorted = [...campaigns].sort((a, b) => {
     const dateOf = (c: CampaignRow) => c.sent_at ?? c.scheduled_at ?? c.updated_at;
@@ -26,7 +28,8 @@ function groupCampaigns(campaigns: CampaignRow[]): [string, CampaignRow[]][] {
   });
 
   const drafts = sorted.filter((c) => c.status === "draft");
-  const rest = sorted.filter((c) => c.status !== "draft");
+  const queued = sorted.filter((c) => c.status === "queued");
+  const rest = sorted.filter((c) => c.status !== "draft" && c.status !== "queued");
 
   const groups = new Map<string, CampaignRow[]>();
   for (const c of rest) {
@@ -37,8 +40,10 @@ function groupCampaigns(campaigns: CampaignRow[]): [string, CampaignRow[]][] {
     groups.set(label, list);
   }
 
-  const entries = [...groups.entries()];
-  return drafts.length > 0 ? [[DRAFTS_GROUP, drafts], ...entries] : entries;
+  const entries: [string, CampaignRow[]][] = [...groups.entries()];
+  if (queued.length > 0) entries.unshift([QUEUED_GROUP, queued]);
+  if (drafts.length > 0) entries.unshift([DRAFTS_GROUP, drafts]);
+  return entries;
 }
 
 export default async function CampaignsPage() {
@@ -111,7 +116,7 @@ export default async function CampaignsPage() {
                       {new Date(c.updated_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {canManageCampaigns && <DeleteCampaignButton id={c.id} sent={c.status !== "draft"} />}
+                      {canManageCampaigns && <DeleteCampaignButton id={c.id} status={c.status} />}
                     </td>
                   </tr>
                 ))}

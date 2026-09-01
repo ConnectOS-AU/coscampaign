@@ -150,8 +150,17 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
           <h1 className="text-2xl font-semibold text-neutral-900">{campaign.name}</h1>
           <p className="text-sm text-neutral-500">{campaign.subject}</p>
         </div>
-        {campaign.status !== "draft" && <ResendPanel campaignId={id} recipients={recipients} notOpened={notOpened} notReceived={notReceived} />}
+        {campaign.status !== "draft" && campaign.status !== "queued" && (
+          <ResendPanel campaignId={id} recipients={recipients} notOpened={notOpened} notReceived={notReceived} />
+        )}
       </div>
+
+      {campaign.status === "queued" && (
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
+          Preparing to send -- SendGrid is importing the recipient list. This page will show delivery stats once
+          it's actually sent, usually within a few minutes; refresh to check.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="Delivered" value={funnel.delivered} />

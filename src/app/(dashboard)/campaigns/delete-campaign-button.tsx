@@ -1,9 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { Campaign } from "@/lib/types";
 import { deleteCampaign } from "./actions";
 
-export function DeleteCampaignButton({ id, sent }: { id: string; sent: boolean }) {
+const WARNINGS: Partial<Record<Campaign["status"], string>> = {
+  queued: "Delete? This will cancel the send that's currently being prepared.",
+  scheduled: "Delete? This will cancel the scheduled send.",
+  sending: "Delete? This permanently removes its send history and stats.",
+  sent: "Delete? This permanently removes its send history and stats.",
+};
+
+export function DeleteCampaignButton({ id, status }: { id: string; status: Campaign["status"] }) {
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState(false);
 
@@ -17,9 +25,7 @@ export function DeleteCampaignButton({ id, sent }: { id: string; sent: boolean }
 
   return (
     <span className="inline-flex items-center gap-2 text-xs">
-      <span className="text-neutral-500">
-        {sent ? "Delete? This permanently removes its send history and stats." : "Delete?"}
-      </span>
+      <span className="text-neutral-500">{WARNINGS[status] ?? "Delete?"}</span>
       <button
         disabled={pending}
         onClick={() => startTransition(() => deleteCampaign(id))}

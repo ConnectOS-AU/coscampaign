@@ -1,6 +1,6 @@
 import type { EmployeeRecipientFilter } from "./employees";
 
-export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent";
+export type CampaignStatus = "draft" | "queued" | "scheduled" | "sending" | "sent";
 
 export type Campaign = {
   id: string;
@@ -19,6 +19,15 @@ export type Campaign = {
   recipient_filter: EmployeeRecipientFilter | null;
   event_id: string | null;
   individual_recipient_emails: string[] | null;
+  // Set while status is "queued" -- the background worker in
+  // src/lib/campaign-queue.ts polls sendgrid_pending_import_job_id and, once
+  // SendGrid's contact import finishes, finalizes the send using
+  // queued_sender_id/queued_send_at (captured at "Send now" time, since
+  // there's no live request to read them from once queued).
+  sendgrid_pending_import_job_id: string | null;
+  queued_sender_id: number | null;
+  queued_send_at: string | null;
+  queued_at: string | null;
   scheduled_at: string | null;
   sent_at: string | null;
   created_by: string | null;

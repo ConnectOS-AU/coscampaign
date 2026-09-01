@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
-import { createList, upsertContactsToList, waitForContactImport } from "@/lib/sendgrid";
+import { createList, upsertContactsToList } from "@/lib/sendgrid";
 import type { Campaign } from "@/lib/types";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -44,16 +44,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       `Resend: ${original.name} (${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)})`,
     );
 
+    // Not waiting for the import to finish here -- it's tracked on the draft
+    // via sendgrid_pending_import_job_id, and the send queue (see
+    // src/lib/campaign-queue.ts) waits for it once the user actually sends
+    // this draft, the same way it does for every other recipient source.
     const importJob = await upsertContactsToList(list.id, emails);
-    const importResult = await waitForContactImport(importJob.job_id);
-    if (importResult.status !== "completed") {
-      return NextResponse.json(
-        {
-          error: `SendGrid is still processing the contact import (status: ${importResult.status}). The list "${list.name}" was created — wait a moment and try scheduling the resend draft directly from the editor.`,
-        },
-        { status: 202 },
-      );
-    }
 
     const { data: draft, error: insertError } = await supabase
       .from("marketing_email_campaigns")
@@ -66,6 +61,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         html_content: original.html_content,
         status: "draft",
         sendgrid_list_ids: [list.id],
+        sendgrid_pending_import_job_id: importJob.job_id,
         sendgrid_segment_ids: [],
         sendgrid_suppression_group_id: original.sendgrid_suppression_group_id,
         resend_of_campaign_id: original.id,

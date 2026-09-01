@@ -1,0 +1,6 @@
+export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startCampaignQueueWorker } = await import("@/lib/campaign-queue");
+    startCampaignQueueWorker();
+  }
+}

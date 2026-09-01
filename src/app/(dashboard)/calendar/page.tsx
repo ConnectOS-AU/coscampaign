@@ -4,6 +4,7 @@ import type { Campaign } from "@/lib/types";
 
 const STATUS_STYLES: Record<Campaign["status"], string> = {
   draft: "bg-neutral-100 text-neutral-700",
+  queued: "bg-purple-100 text-purple-800",
   scheduled: "bg-amber-100 text-amber-800",
   sending: "bg-blue-100 text-blue-800",
   sent: "bg-green-100 text-green-800",

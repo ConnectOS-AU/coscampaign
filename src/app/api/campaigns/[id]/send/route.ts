@@ -2,66 +2,20 @@ import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
-import { createSingleSend, updateSingleSend, scheduleSingleSend, createList, upsertContactsToList, getList } from "@/lib/sendgrid";
-import { injectReadDepthPixels } from "@/lib/read-depth";
+import { createList, upsertContactsToList } from "@/lib/sendgrid";
 import { emptyEmployeeFilter, resolveEmployeeEmails } from "@/lib/employees";
 import { resolveEventRegistrantEmails } from "@/lib/events";
 import type { Campaign } from "@/lib/types";
 
-const STILL_PREPARING_MESSAGE =
-  "SendGrid is still preparing the recipient list -- this can take a minute for brand-new contacts. Try sending again shortly.";
-
 /**
- * Ensures a SendGrid list has (at least) the given emails, reusing a list a
- * previous attempt already started building for this campaign instead of
- * creating a new one every retry. SendGrid's contact import is async and can
- * occasionally take well over a minute, so blocking the request on it isn't
- * reliable -- instead, the first call kicks off the import and returns
- * "not ready" immediately, and a retry checks the *same* list rather than
- * starting a duplicate (which previously built up a real backlog of
- * abandoned lists in the account).
+ * Kicks off (or reuses) a SendGrid list/import for this campaign and marks
+ * it "queued" -- the background worker in src/lib/campaign-queue.ts (started
+ * from src/instrumentation.ts) polls queued campaigns and finalizes the
+ * actual send once SendGrid's contact import finishes. Nothing here blocks
+ * on that import completing: previously this request waited synchronously
+ * for it, which occasionally took well over a minute and caused the request
+ * to time out with no useful error.
  */
-async function ensureRecipientList(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  campaignId: string,
-  baseName: string,
-  existingListId: string | undefined,
-  emails: string[],
-): Promise<{ ready: boolean; listId: string }> {
-  if (existingListId) {
-    const list = await getList(existingListId);
-    return { ready: list.contact_count >= emails.length, listId: existingListId };
-  }
-
-  const name = `${baseName} (${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)})`;
-  const list = await createList(name);
-  await upsertContactsToList(list.id, emails);
-
-  // Persist immediately (before the import finishes) so a retry -- even a
-  // fast one -- reuses this list instead of racing to create another.
-  const { error } = await supabase
-    .from("marketing_email_campaigns")
-    .update({ sendgrid_list_ids: [list.id] })
-    .eq("id", campaignId);
-  if (error) {
-    console.error(`[campaigns/${campaignId}/send] Failed to persist in-progress list id:`, error);
-  }
-
-  return { ready: false, listId: list.id };
-}
-
-function extractLinks(html: string): string[] {
-  const hrefRegex = /href=["']([^"'#][^"']*)["']/gi;
-  const urls = new Set<string>();
-  let match: RegExpExecArray | null;
-  while ((match = hrefRegex.exec(html)) !== null) {
-    if (match[1].startsWith("http://") || match[1].startsWith("https://")) {
-      urls.add(match[1]);
-    }
-  }
-  return [...urls];
-}
-
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSession();
@@ -99,21 +53,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  // A resend draft already has a specific SendGrid list built from exact
-  // tracking-history-derived emails (non-openers etc.) -- that can't be
-  // expressed as an employee-directory filter, so it bypasses filter
-  // resolution entirely and reuses the list the resend flow already built.
   const isResend = Boolean(campaign.resend_of_campaign_id);
-  let recipientListId: string;
-  let recipientCount: number;
+  let sendgridListId: string;
+  let pendingImportJobId: string | null;
 
   if (isResend) {
+    // A resend draft already has a specific SendGrid list built from exact
+    // tracking-history-derived emails -- reuse it as-is. Its import may
+    // still be in flight (the resend flow doesn't block on it either), so
+    // carry over whatever pending job id it has; the queue worker below
+    // waits for that the same way it does for every other recipient source.
     const existingListId = campaign.sendgrid_list_ids?.[0];
     if (!existingListId) {
       return NextResponse.json({ error: "This resend draft is missing its recipient list" }, { status: 400 });
     }
-    recipientListId = existingListId;
-    recipientCount = 0; // Already known from the resend step; not re-fetched here.
+    sendgridListId = existingListId;
+    pendingImportJobId = campaign.sendgrid_pending_import_job_id;
   } else {
     let emails: string[];
     if (campaign.event_id) {
@@ -136,96 +91,45 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     try {
-      const { ready, listId } = await ensureRecipientList(
-        supabase,
-        id,
-        campaign.name,
-        campaign.sendgrid_list_ids?.[0],
-        emails,
-      );
-      if (!ready) {
-        return NextResponse.json({ error: STILL_PREPARING_MESSAGE }, { status: 202 });
+      if (campaign.sendgrid_list_ids?.[0] && campaign.sendgrid_pending_import_job_id) {
+        // A previous attempt already started building this list -- reuse it
+        // rather than creating another (that's what previously built up a
+        // real backlog of duplicate lists in the SendGrid account).
+        sendgridListId = campaign.sendgrid_list_ids[0];
+        pendingImportJobId = campaign.sendgrid_pending_import_job_id;
+      } else {
+        const name = `${campaign.name} (${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)})`;
+        const list = await createList(name);
+        const importJob = await upsertContactsToList(list.id, emails);
+        sendgridListId = list.id;
+        pendingImportJobId = importJob.job_id;
       }
-      recipientListId = listId;
-      recipientCount = emails.length;
     } catch (err) {
-      console.error(`[campaigns/${id}/send] Failed to prepare recipient list:`, err);
+      console.error(`[campaigns/${id}/send] Failed to start recipient list:`, err);
       return NextResponse.json(
-        { error: err instanceof Error ? err.message : "Failed to prepare recipient list" },
+        { error: err instanceof Error ? err.message : "Failed to start preparing the recipient list" },
         { status: 502 },
       );
     }
   }
 
-  const sendStartedAt = Date.now();
-  try {
-    const singleSend = await createSingleSend({ name: campaign.name });
+  const { error: updateError } = await supabase
+    .from("marketing_email_campaigns")
+    .update({
+      status: "queued",
+      sendgrid_list_ids: [sendgridListId],
+      sendgrid_pending_import_job_id: pendingImportJobId,
+      queued_sender_id: senderId,
+      queued_send_at: sendAt,
+      queued_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("status", "draft");
 
-    // SendGrid substitutes {{email}} with the actual recipient address at send
-    // time (it's a reserved Marketing Campaigns merge tag), which is what lets
-    // each recipient's read-depth pixels resolve back to them individually.
-    const origin = new URL(request.url).origin;
-    const htmlWithReadDepth = injectReadDepthPixels(
-      campaign.html_content,
-      (segment) => `${origin}/api/track/pixel/${id}/{{email}}/${segment}`,
-    );
-
-    await updateSingleSend(singleSend.id, {
-      name: campaign.name,
-      send_to: {
-        list_ids: [recipientListId],
-      },
-      email_config: {
-        subject: campaign.subject,
-        html_content: htmlWithReadDepth,
-        sender_id: senderId,
-        suppression_group_id: campaign.sendgrid_suppression_group_id ?? undefined,
-      },
-    });
-
-    await scheduleSingleSend(singleSend.id, sendAt);
-
-    const links = extractLinks(campaign.html_content);
-
-    const { error: updateError } = await supabase
-      .from("marketing_email_campaigns")
-      .update({
-        sendgrid_singlesend_id: singleSend.id,
-        sendgrid_list_ids: [recipientListId],
-        status: sendAt === "now" ? "sending" : "scheduled",
-        scheduled_at: sendAt === "now" ? new Date().toISOString() : sendAt,
-        sent_at: sendAt === "now" ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
-
-    if (updateError) {
-      throw new Error(`Send succeeded in SendGrid but failed to update local record: ${updateError.message}`);
-    }
-
-    if (links.length > 0) {
-      await supabase
-        .from("marketing_email_campaign_links")
-        .upsert(
-          links.map((url) => ({ campaign_id: id, url })),
-          { onConflict: "campaign_id,url", ignoreDuplicates: true },
-        );
-    }
-
-    console.log(`[campaigns/${id}/send] Completed in ${Date.now() - sendStartedAt}ms`);
-    return NextResponse.json({
-      singleSendId: singleSend.id,
-      status: sendAt === "now" ? "sending" : "scheduled",
-      recipientCount,
-    });
-  } catch (err) {
-    console.error(
-      `[campaigns/${id}/send] Failed after ${Date.now() - sendStartedAt}ms creating/scheduling the single send:`,
-      err,
-    );
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to send campaign" },
-      { status: 502 },
-    );
+  if (updateError) {
+    return NextResponse.json({ error: `Failed to queue send: ${updateError.message}` }, { status: 500 });
   }
+
+  return NextResponse.json({ status: "queued" });
 }
