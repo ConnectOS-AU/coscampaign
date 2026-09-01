@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase";
+import { lookupEmployeeByCosid } from "@/lib/employees";
+import { sendTransactionalEmail } from "@/lib/sendgrid";
 import type { Event, EventField } from "@/lib/types";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -8,14 +10,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const body = (await request.json().catch(() => ({}))) as {
     name?: unknown;
     email?: unknown;
+    cosid?: unknown;
     answers?: unknown;
   };
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const cosid = typeof body.cosid === "string" ? body.cosid.trim().toUpperCase() : "";
   const answers: unknown[] = Array.isArray(body.answers) ? body.answers : [];
 
-  if (!name || !email) {
-    return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
+  if (!name || !email || !cosid) {
+    return NextResponse.json({ error: "Name, email, and COSID are required" }, { status: 400 });
+  }
+
+  const employee = await lookupEmployeeByCosid(cosid);
+  if (!employee) {
+    return NextResponse.json(
+      { error: "COSID not recognized. Please check your employee ID and try again." },
+      { status: 400 },
+    );
   }
 
   const supabase = createServiceRoleClient();
@@ -69,7 +81,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: registration, error: registrationError } = await supabase
     .from("marketing_email_event_registrations")
-    .insert({ event_id: id, name, email, status })
+    .insert({ event_id: id, name, email, cosid, verified_email: employee.email, status })
     .select("id")
     .single();
 
@@ -93,5 +105,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  return NextResponse.json({ status });
+  const origin = new URL(request.url).origin;
+  const confirmUrl = `${origin}/e/${id}/confirm/${registration.id}`;
+  try {
+    await sendTransactionalEmail({
+      to: employee.email,
+      subject: `Confirm your registration: ${event.name}`,
+      html: `
+        <p>Hi ${employee.name.split(" ")[0]},</p>
+        <p>You (or someone using your COSID) registered for <strong>${event.name}</strong>${
+          status === "waitlisted" ? " and are currently on the waitlist" : ""
+        }. Click below to confirm this is really you within the next 72 hours, or the registration will be
+        automatically cancelled.</p>
+        <p><a href="${confirmUrl}" style="background:#171717;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;">Confirm registration</a></p>
+        <p style="color:#737373;font-size:12px;">${confirmUrl}</p>
+      `,
+    });
+  } catch (err) {
+    // The registration itself succeeded; a failed confirmation email
+    // shouldn't surface as a failed registration -- log and continue.
+    console.error(`[events/${id}/register] Failed to send confirmation email:`, err);
+  }
+
+  return NextResponse.json({ status, verifiedEmail: employee.email });
 }

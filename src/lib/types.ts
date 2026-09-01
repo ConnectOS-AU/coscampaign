@@ -179,6 +179,12 @@ export type EventRegistration = {
   event_id: string;
   name: string;
   email: string;
+  cosid: string;
+  // The office_email resolved from cosphere_active_employees for `cosid` at
+  // registration time -- may differ from `email` (which is whatever the
+  // registrant typed) and is what confirmation/cancellation emails go to.
+  verified_email: string;
+  email_confirmed_at: string | null;
   status: EventRegistrationStatus;
   registered_at: string;
 };

@@ -71,7 +71,9 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Email</th>
+              <th className="px-4 py-3 font-medium">COSID</th>
               <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Verified</th>
               {(fields ?? []).map((f) => (
                 <th key={f.id} className="px-4 py-3 font-medium">
                   {f.field_label}
@@ -85,6 +87,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
               <tr key={r.id}>
                 <td className="px-4 py-3 text-neutral-900">{r.name}</td>
                 <td className="px-4 py-3 text-neutral-600">{r.email}</td>
+                <td className="px-4 py-3 text-neutral-600">{r.cosid}</td>
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -92,6 +95,15 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                     }`}
                   >
                     {r.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      r.email_confirmed_at ? "bg-green-100 text-green-800" : "bg-neutral-100 text-neutral-600"
+                    }`}
+                  >
+                    {r.email_confirmed_at ? "Verified" : "Pending"}
                   </span>
                 </td>
                 {(fields ?? []).map((f) => (
@@ -104,7 +116,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
             ))}
             {(registrations ?? []).length === 0 && (
               <tr>
-                <td colSpan={4 + (fields ?? []).length} className="px-4 py-8 text-center text-neutral-500">
+                <td colSpan={6 + (fields ?? []).length} className="px-4 py-8 text-center text-neutral-500">
                   No registrations yet.
                 </td>
               </tr>

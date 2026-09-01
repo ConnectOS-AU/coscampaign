@@ -119,3 +119,20 @@ export async function searchEmployees(query: string): Promise<EmployeeSearchResu
   }
   return results;
 }
+
+/** Resolves a COSID (employee_id, e.g. "COS0075") to the employee's verified name/email, for identity checks like event registration. */
+export async function lookupEmployeeByCosid(cosid: string): Promise<{ name: string; email: string } | null> {
+  const normalized = cosid.trim().toUpperCase();
+  if (!normalized) return null;
+
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("cosphere_active_employees")
+    .select("staff_name, office_email")
+    .eq("employee_id", normalized)
+    .eq("status", "ACTIVE")
+    .maybeSingle<{ staff_name: string | null; office_email: string | null }>();
+
+  if (!data?.office_email) return null;
+  return { name: data.staff_name ?? data.office_email, email: data.office_email };
+}

@@ -6,9 +6,10 @@ import type { EventField } from "@/lib/types";
 export function EventRegistrationForm({ eventId, fields }: { eventId: string; fields: EventField[] }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [cosid, setCosid] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<"confirmed" | "waitlisted" | null>(null);
+  const [result, setResult] = useState<{ status: "confirmed" | "waitlisted"; verifiedEmail: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -22,12 +23,13 @@ export function EventRegistrationForm({ eventId, fields }: { eventId: string; fi
         body: JSON.stringify({
           name,
           email,
+          cosid,
           answers: fields.map((f) => ({ field_id: f.id, answer_text: answers[f.id] ?? "" })),
         }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? "Failed to register");
-      setResult(body.status ?? "confirmed");
+      setResult({ status: body.status ?? "confirmed", verifiedEmail: body.verifiedEmail ?? email });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to register");
     } finally {
@@ -35,14 +37,19 @@ export function EventRegistrationForm({ eventId, fields }: { eventId: string; fi
     }
   }
 
-  if (result === "confirmed") {
-    return <p className="mt-6 text-sm font-medium text-green-700">You&apos;re registered — see you there!</p>;
-  }
-  if (result === "waitlisted") {
+  if (result) {
     return (
-      <p className="mt-6 text-sm font-medium text-amber-700">
-        This event is full — you&apos;ve been added to the waitlist. We&apos;ll reach out if a spot opens up.
-      </p>
+      <div className="mt-6 space-y-2">
+        <p className="text-sm font-medium text-neutral-900">
+          {result.status === "waitlisted"
+            ? "This event is full, so you've been added to the waitlist."
+            : "Almost there!"}
+        </p>
+        <p className="text-sm text-neutral-600">
+          We sent a confirmation link to <strong>{result.verifiedEmail}</strong> (the address on file for your
+          COSID). Click it within 72 hours to confirm your registration, or it will be automatically cancelled.
+        </p>
+      </div>
     );
   }
 
@@ -66,6 +73,19 @@ export function EventRegistrationForm({ eventId, fields }: { eventId: string; fi
           required
           className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
         />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium text-neutral-800">Employee ID (COSID)</label>
+        <input
+          value={cosid}
+          onChange={(e) => setCosid(e.target.value)}
+          required
+          placeholder="COS0000"
+          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+        />
+        <p className="text-xs text-neutral-500">
+          Used to verify it&apos;s really you — your confirmation link goes to the email on file for this ID.
+        </p>
       </div>
 
       {fields.map((f) => (

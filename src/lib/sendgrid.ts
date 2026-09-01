@@ -59,7 +59,11 @@ async function sgFetch<T>(path: string, init?: RequestInit): Promise<T> {
     return undefined as T;
   }
 
-  return (await res.json()) as T;
+  // Some 202 responses carry a JSON body (e.g. /marketing/contacts returns a
+  // job_id) and some don't (e.g. /mail/send) -- check for actual content
+  // rather than assuming from the status code.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export async function listContactLists(): Promise<SendGridList[]> {
@@ -194,6 +198,36 @@ export async function waitForContactImport(
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
   return last;
+}
+
+/**
+ * A one-off transactional email (e.g. an event registration confirmation),
+ * as distinct from everything else in this file which goes through the
+ * Marketing Campaigns API. Uses SendGrid's plain /mail/send endpoint.
+ */
+export async function sendTransactionalEmail({
+  to,
+  subject,
+  html,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<void> {
+  const fromEmail = process.env.SENDGRID_FROM_EMAIL;
+  if (!fromEmail) {
+    throw new Error("SENDGRID_FROM_EMAIL is not set");
+  }
+
+  await sgFetch("/mail/send", {
+    method: "POST",
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from: { email: fromEmail, name: process.env.SENDGRID_FROM_NAME || undefined },
+      subject,
+      content: [{ type: "text/html", value: html }],
+    }),
+  });
 }
 
 export type DomainAuthentication = {
