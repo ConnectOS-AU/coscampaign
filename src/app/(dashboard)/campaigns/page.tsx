@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
@@ -13,6 +14,33 @@ const STATUS_STYLES: Record<Campaign["status"], string> = {
   sent: "bg-green-100 text-green-800",
 };
 
+type CampaignRow = Pick<Campaign, "id" | "name" | "subject" | "status" | "sent_at" | "scheduled_at" | "updated_at">;
+
+const DRAFTS_GROUP = "Drafts";
+
+/** Groups by the date a campaign was sent (or is scheduled to send); drafts have neither, so they get their own group. */
+function groupCampaigns(campaigns: CampaignRow[]): [string, CampaignRow[]][] {
+  const sorted = [...campaigns].sort((a, b) => {
+    const dateOf = (c: CampaignRow) => c.sent_at ?? c.scheduled_at ?? c.updated_at;
+    return new Date(dateOf(b)).getTime() - new Date(dateOf(a)).getTime();
+  });
+
+  const drafts = sorted.filter((c) => c.status === "draft");
+  const rest = sorted.filter((c) => c.status !== "draft");
+
+  const groups = new Map<string, CampaignRow[]>();
+  for (const c of rest) {
+    const date = c.sent_at ?? c.scheduled_at;
+    const label = date ? new Date(date).toLocaleDateString("en-AU", { year: "numeric", month: "long", day: "numeric" }) : "Unknown date";
+    const list = groups.get(label) ?? [];
+    list.push(c);
+    groups.set(label, list);
+  }
+
+  const entries = [...groups.entries()];
+  return drafts.length > 0 ? [[DRAFTS_GROUP, drafts], ...entries] : entries;
+}
+
 export default async function CampaignsPage() {
   const session = await getSession();
   const canManageCampaigns = hasPermission(session, "manage_campaigns");
@@ -22,7 +50,9 @@ export default async function CampaignsPage() {
     .from("marketing_email_campaigns")
     .select("id, name, subject, status, sent_at, scheduled_at, updated_at")
     .order("updated_at", { ascending: false })
-    .returns<Pick<Campaign, "id" | "name" | "subject" | "status" | "sent_at" | "scheduled_at" | "updated_at">[]>();
+    .returns<CampaignRow[]>();
+
+  const groups = groupCampaigns(campaigns ?? []);
 
   return (
     <div className="space-y-6">
@@ -54,29 +84,38 @@ export default async function CampaignsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
-            {(campaigns ?? []).map((c) => (
-              <tr key={c.id} className="hover:bg-neutral-50">
-                <td className="px-4 py-3">
-                  <Link
-                    href={c.status === "draft" ? `/campaigns/${c.id}/edit` : `/campaigns/${c.id}/report`}
-                    className="font-medium text-neutral-900 hover:underline"
-                  >
-                    {c.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-neutral-600">{c.subject ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_STYLES[c.status]}`}>
-                    {c.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-neutral-500">
-                  {new Date(c.updated_at).toLocaleString()}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {canManageCampaigns && c.status === "draft" && <DeleteCampaignButton id={c.id} />}
-                </td>
-              </tr>
+            {groups.map(([label, rows]) => (
+              <Fragment key={label}>
+                <tr>
+                  <td colSpan={5} className="bg-neutral-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    {label}
+                  </td>
+                </tr>
+                {rows.map((c) => (
+                  <tr key={c.id} className="hover:bg-neutral-50">
+                    <td className="px-4 py-3">
+                      <Link
+                        href={c.status === "draft" ? `/campaigns/${c.id}/edit` : `/campaigns/${c.id}/report`}
+                        className="font-medium text-neutral-900 hover:underline"
+                      >
+                        {c.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-neutral-600">{c.subject ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_STYLES[c.status]}`}>
+                        {c.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-neutral-500">
+                      {new Date(c.updated_at).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {canManageCampaigns && <DeleteCampaignButton id={c.id} sent={c.status !== "draft"} />}
+                    </td>
+                  </tr>
+                ))}
+              </Fragment>
             ))}
             {campaigns?.length === 0 && (
               <tr>

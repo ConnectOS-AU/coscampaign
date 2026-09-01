@@ -97,11 +97,7 @@ export async function deleteCampaign(id: string) {
   requirePermission(session, "manage_campaigns");
 
   const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("marketing_email_campaigns")
-    .delete()
-    .eq("id", id)
-    .eq("status", "draft");
+  const { error } = await supabase.from("marketing_email_campaigns").delete().eq("id", id);
 
   if (error) {
     throw new Error(`Failed to delete campaign: ${error.message}`);

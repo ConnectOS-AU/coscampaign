@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { deleteCampaign } from "./actions";
 
-export function DeleteCampaignButton({ id }: { id: string }) {
+export function DeleteCampaignButton({ id, sent }: { id: string; sent: boolean }) {
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState(false);
 
@@ -17,7 +17,9 @@ export function DeleteCampaignButton({ id }: { id: string }) {
 
   return (
     <span className="inline-flex items-center gap-2 text-xs">
-      <span className="text-neutral-500">Delete?</span>
+      <span className="text-neutral-500">
+        {sent ? "Delete? This permanently removes its send history and stats." : "Delete?"}
+      </span>
       <button
         disabled={pending}
         onClick={() => startTransition(() => deleteCampaign(id))}
