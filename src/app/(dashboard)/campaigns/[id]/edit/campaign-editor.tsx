@@ -13,6 +13,8 @@ import { EmployeeRecipientPicker } from "./employee-recipient-picker";
 
 type TemplateOption = Pick<EmailTemplate, "id" | "name" | "unlayer_design_json">;
 
+export type CampaignEventOption = { id: string; name: string; registrantCount: number };
+
 type Props = {
   campaign: Campaign;
   senders: Sender[];
@@ -20,6 +22,7 @@ type Props = {
   initialEmployeeOptions: EmployeeFilterOptions;
   templates: TemplateOption[];
   libraryImages: LibraryImage[];
+  eventOptions: CampaignEventOption[];
 };
 
 type ImageUploadDone = (result: { progress?: number; url?: string }) => void;
@@ -32,6 +35,7 @@ export function CampaignEditor({
   initialEmployeeOptions,
   templates,
   libraryImages,
+  eventOptions,
 }: Props) {
   const router = useRouter();
   const editorRef = useRef<EditorRef>(null);
@@ -48,6 +52,7 @@ export function CampaignEditor({
     ...campaign.recipient_filter,
   });
   const [matchingCount, setMatchingCount] = useState(initialEmployeeOptions.matchingCount);
+  const [eventId, setEventId] = useState<string | null>(campaign.event_id);
   const [suppressionGroupId, setSuppressionGroupId] = useState(
     campaign.sendgrid_suppression_group_id?.toString() ??
       suppressionGroups.find((g) => g.is_default)?.id.toString() ??
@@ -110,6 +115,7 @@ export function CampaignEditor({
         html_content: html,
         unlayer_design_json: design,
         recipient_filter: recipientFilter,
+        event_id: eventId,
         sendgrid_suppression_group_id: suppressionGroupId ? Number(suppressionGroupId) : null,
       });
       setMessage({ type: "success", text: "Draft saved." });
@@ -130,9 +136,17 @@ export function CampaignEditor({
       return;
     }
     const isResend = Boolean(campaign.resend_of_campaign_id);
-    if (!isResend && matchingCount === 0) {
-      setMessage({ type: "error", text: "No employees match the current recipient filters." });
-      return;
+    if (!isResend) {
+      if (eventId) {
+        const registrantCount = eventOptions.find((e) => e.id === eventId)?.registrantCount ?? 0;
+        if (registrantCount === 0) {
+          setMessage({ type: "error", text: "This event has no registrants yet." });
+          return;
+        }
+      } else if (matchingCount === 0) {
+        setMessage({ type: "error", text: "No employees match the current recipient filters." });
+        return;
+      }
     }
     if (!suppressionGroupId) {
       setMessage({ type: "error", text: "Choose an unsubscribe group before sending (required by SendGrid)." });
@@ -159,6 +173,7 @@ export function CampaignEditor({
         html_content: html,
         unlayer_design_json: design,
         recipient_filter: recipientFilter,
+        event_id: eventId,
         sendgrid_suppression_group_id: suppressionGroupId ? Number(suppressionGroupId) : null,
       });
 
@@ -329,12 +344,47 @@ export function CampaignEditor({
             </p>
           </div>
         ) : (
-          <EmployeeRecipientPicker
-            value={recipientFilter}
-            onChange={setRecipientFilter}
-            initialOptions={initialEmployeeOptions}
-            onMatchingCountChange={setMatchingCount}
-          />
+          <div className="space-y-3 md:col-span-2">
+            <div className="flex gap-4 text-sm text-neutral-700">
+              <label className="flex items-center gap-2">
+                <input type="radio" checked={eventId === null} onChange={() => setEventId(null)} />
+                Employees
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={eventId !== null}
+                  disabled={eventOptions.length === 0}
+                  onChange={() => setEventId(eventOptions[0]?.id ?? null)}
+                />
+                Event registrants
+              </label>
+            </div>
+
+            {eventId === null ? (
+              <EmployeeRecipientPicker
+                value={recipientFilter}
+                onChange={setRecipientFilter}
+                initialOptions={initialEmployeeOptions}
+                onMatchingCountChange={setMatchingCount}
+              />
+            ) : (
+              <div className="space-y-2 rounded-lg border border-neutral-200 bg-white p-4">
+                <label className="text-sm font-medium text-neutral-700">Event</label>
+                <select
+                  value={eventId}
+                  onChange={(e) => setEventId(e.target.value)}
+                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+                >
+                  {eventOptions.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name} ({e.registrantCount} registrants)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

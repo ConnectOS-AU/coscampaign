@@ -1,7 +1,9 @@
 import { OTP } from "otplib";
-import QRCode from "qrcode";
+import { generateQrCodeDataUrl } from "@/lib/qrcode";
 
 const otp = new OTP({ strategy: "totp" });
+
+export { generateQrCodeDataUrl };
 
 // Tolerate one time-step of drift in either direction (±30s), matching the
 // leeway most authenticator apps and other TOTP implementations use.
@@ -13,10 +15,6 @@ export function generateTotpSecret(): string {
 
 export function generateTotpUri(email: string, secret: string): string {
   return otp.generateURI({ issuer: "COSCampaign", label: email, secret });
-}
-
-export async function generateQrCodeDataUrl(uri: string): Promise<string> {
-  return QRCode.toDataURL(uri);
 }
 
 export async function verifyTotpCode(secret: string, code: string): Promise<boolean> {

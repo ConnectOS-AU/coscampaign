@@ -17,6 +17,7 @@ export type Campaign = {
   sendgrid_suppression_group_id: number | null;
   resend_of_campaign_id: string | null;
   recipient_filter: EmployeeRecipientFilter | null;
+  event_id: string | null;
   scheduled_at: string | null;
   sent_at: string | null;
   created_by: string | null;
@@ -126,6 +127,56 @@ export type SurveyAnswer = {
   id: string;
   response_id: string;
   question_id: string;
+  answer_text: string | null;
+};
+
+export type EventInviteMode = "manual" | "auto_embed";
+export type EventStatus = "draft" | "open" | "closed";
+
+export type Event = {
+  id: string;
+  name: string;
+  description: string | null;
+  location: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  banner_image_url: string | null;
+  capacity: number | null;
+  invite_mode: EventInviteMode;
+  status: EventStatus;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EventFieldType = "text" | "multiple_choice";
+
+export type EventField = {
+  id: string;
+  event_id: string;
+  position: number;
+  field_label: string;
+  field_type: EventFieldType;
+  options: string[] | null;
+  required: boolean;
+  created_at: string;
+};
+
+export type EventRegistrationStatus = "confirmed" | "waitlisted";
+
+export type EventRegistration = {
+  id: string;
+  event_id: string;
+  name: string;
+  email: string;
+  status: EventRegistrationStatus;
+  registered_at: string;
+};
+
+export type EventRegistrationAnswer = {
+  id: string;
+  registration_id: string;
+  field_id: string;
   answer_text: string | null;
 };
 

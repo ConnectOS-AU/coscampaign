@@ -5,7 +5,16 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { createSingleSend, updateSingleSend, scheduleSingleSend, createList, upsertContactsToList, waitForContactImport } from "@/lib/sendgrid";
 import { injectReadDepthPixels } from "@/lib/read-depth";
 import { emptyEmployeeFilter, resolveEmployeeEmails } from "@/lib/employees";
+import { resolveEventRegistrantEmails } from "@/lib/events";
 import type { Campaign } from "@/lib/types";
+
+/** Creates a fresh SendGrid list from an email set and waits for the import to finish. */
+async function buildSendGridList(name: string, emails: string[]) {
+  const list = await createList(name);
+  const importJob = await upsertContactsToList(list.id, emails);
+  const importResult = await waitForContactImport(importJob.job_id);
+  return { list, importResult };
+}
 
 function extractLinks(html: string): string[] {
   const hrefRegex = /href=["']([^"'#][^"']*)["']/gi;
@@ -71,6 +80,35 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     recipientListId = existingListId;
     recipientCount = 0; // Already known from the resend step; not re-fetched here.
+  } else if (campaign.event_id) {
+    // All registrants (confirmed + waitlisted) are eligible -- the
+    // confirmed/waitlisted distinction only matters for event capacity.
+    const emails = await resolveEventRegistrantEmails(campaign.event_id);
+    if (emails.length === 0) {
+      return NextResponse.json({ error: "This event has no registrants yet" }, { status: 400 });
+    }
+
+    try {
+      const { list, importResult } = await buildSendGridList(
+        `${campaign.name} (${new Date().toISOString().slice(0, 10)})`,
+        emails,
+      );
+      if (importResult.status !== "completed") {
+        return NextResponse.json(
+          {
+            error: `SendGrid is still processing the recipient list (status: ${importResult.status}). Wait a moment and try sending again.`,
+          },
+          { status: 202 },
+        );
+      }
+      recipientListId = list.id;
+      recipientCount = emails.length;
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Failed to prepare recipient list" },
+        { status: 502 },
+      );
+    }
   } else {
     // Resolve recipients fresh from the employee directory at send time,
     // rather than at the moment the filter was picked, so the roster is
@@ -81,9 +119,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     try {
-      const list = await createList(`${campaign.name} (${new Date().toISOString().slice(0, 10)})`);
-      const importJob = await upsertContactsToList(list.id, emails);
-      const importResult = await waitForContactImport(importJob.job_id);
+      const { list, importResult } = await buildSendGridList(
+        `${campaign.name} (${new Date().toISOString().slice(0, 10)})`,
+        emails,
+      );
       if (importResult.status !== "completed") {
         return NextResponse.json(
           {

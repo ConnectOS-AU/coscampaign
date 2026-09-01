@@ -5,7 +5,8 @@ export type PermissionKey =
   | "manage_campaigns"
   | "manage_templates"
   | "manage_images"
-  | "manage_surveys";
+  | "manage_surveys"
+  | "manage_events";
 
 export function hasPermission(session: Session | null, key: PermissionKey): boolean {
   return session?.permissions.includes(key) ?? false;
