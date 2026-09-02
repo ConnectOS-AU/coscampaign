@@ -87,7 +87,13 @@ export async function createSession(userId: string): Promise<void> {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    expires: new Date(Date.now() + SESSION_DURATION_MS),
+    // Deliberately no `expires`/`maxAge` -- this makes it a browser session
+    // cookie, cleared when the browser is fully closed (not just the tab),
+    // so closing out of the browser always requires a fresh login + 2FA
+    // rather than silently staying signed in. The underlying app_sessions
+    // row is still capped at SESSION_DURATION_MS server-side as a ceiling,
+    // in case a browser is configured to restore session cookies on restart
+    // (e.g. Chrome's "continue where you left off").
   });
 }
 
