@@ -13,8 +13,22 @@ type SendGridEvent = {
   useragent?: string;
   ip?: string;
   singlesend_id?: string;
+  // SendGrid's stock event payload doesn't reliably carry any Marketing
+  // Campaigns identifier (confirmed by inspecting real captured payloads --
+  // no singlesend_id was present even on delivered/processed events despite
+  // docs suggesting it can appear). Sends now explicitly tag themselves with
+  // their own campaign id as a category (see createSingleSend call sites),
+  // which SendGrid always echoes back here regardless of event type.
+  category?: string | string[];
   [key: string]: unknown;
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function campaignIdFromCategory(category: string | string[] | undefined): string | null {
+  const categories = Array.isArray(category) ? category : category ? [category] : [];
+  return categories.find((c) => UUID_RE.test(c)) ?? null;
+}
 
 function verify(rawBody: string, signature: string, timestamp: string): boolean {
   const publicKey = process.env.SENDGRID_WEBHOOK_VERIFICATION_KEY;
@@ -69,8 +83,10 @@ export async function POST(request: Request) {
 
   const rows = events.map((e) => {
     const occurredAt = e.timestamp ? new Date(e.timestamp * 1000).toISOString() : null;
+    const campaignId =
+      campaignIdFromCategory(e.category) ?? (e.singlesend_id ? (campaignIdBySinglesendId.get(e.singlesend_id) ?? null) : null);
     return {
-      campaign_id: e.singlesend_id ? (campaignIdBySinglesendId.get(e.singlesend_id) ?? null) : null,
+      campaign_id: campaignId,
       sendgrid_message_id: e.sg_message_id ?? null,
       contact_email: e.email ?? null,
       event_type: e.event,
@@ -91,6 +107,24 @@ export async function POST(request: Request) {
     if (error) {
       console.error("Failed to store SendGrid events:", error);
       return NextResponse.json({ error: "Failed to store events" }, { status: 500 });
+    }
+  }
+
+  // "sending" has no automatic promotion to "sent" anywhere else in the app
+  // -- a "processed" event is SendGrid's earliest signal that the send was
+  // actually dispatched, so treat receiving one as confirmation this
+  // campaign has gone out for real.
+  const processedCampaignIds = [
+    ...new Set(rows.filter((r) => r.event_type === "processed" && r.campaign_id).map((r) => r.campaign_id as string)),
+  ];
+  if (processedCampaignIds.length > 0) {
+    const { error: statusError } = await supabase
+      .from("marketing_email_campaigns")
+      .update({ status: "sent" })
+      .in("id", processedCampaignIds)
+      .eq("status", "sending");
+    if (statusError) {
+      console.error("Failed to mark campaigns sent:", statusError);
     }
   }
 

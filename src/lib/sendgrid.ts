@@ -78,6 +78,12 @@ export async function listSegments(): Promise<SendGridSegment[]> {
 
 export type CreateSingleSendInput = {
   name: string;
+  // Echoed back on every Event Webhook event for this send as `category`
+  // (an array) -- the only reliable way found to correlate an incoming
+  // webhook event with the campaign it came from. SendGrid's stock event
+  // payload otherwise carries no Marketing Campaigns identifier at all for
+  // most event types (confirmed by inspecting real captured payloads).
+  categories?: string[];
 };
 
 export async function createSingleSend(input: CreateSingleSendInput): Promise<SingleSend> {

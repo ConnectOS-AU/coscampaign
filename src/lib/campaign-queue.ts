@@ -29,7 +29,9 @@ async function finalizeSend(supabase: ReturnType<typeof createServiceRoleClient>
     throw new Error("NEXT_PUBLIC_APP_URL is not set -- required to build tracking pixel URLs");
   }
 
-  const singleSend = await createSingleSend({ name: campaign.name });
+  // The category is how the webhook handler correlates events back to this
+  // campaign -- see the comment on CreateSingleSendInput.
+  const singleSend = await createSingleSend({ name: campaign.name, categories: [campaign.id] });
 
   // SendGrid substitutes {{email}} with the actual recipient address at send
   // time (it's a reserved Marketing Campaigns merge tag), which is what lets
