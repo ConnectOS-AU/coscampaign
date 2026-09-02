@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth/session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { generateQrCodeDataUrl } from "@/lib/qrcode";
 import { buildEventInviteDesign } from "@/lib/unlayer-design";
+import { buildEventEmailHtml } from "@/lib/event-email";
 import type { Event, EventFieldType, EventInviteMode, EventStatus } from "@/lib/types";
 
 const IMAGE_BUCKET = "campaign-images";
@@ -167,18 +168,18 @@ export async function createInviteCampaignForEvent({ eventId, origin }: { eventI
     .filter(Boolean)
     .join(" · ");
 
-  const html = `
-    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; text-align: center;">
-      <h1 style="font-size: 20px;">${event.name}</h1>
+  const html = buildEventEmailHtml({
+    eventName: event.name,
+    bodyHtml: `
       ${details ? `<p style="color: #525252;">${details}</p>` : ""}
       ${event.description ? `<p>${event.description}</p>` : ""}
-      <p style="margin: 24px 0;">
-        <a href="${registrationUrl}" style="background: #171717; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Register Now</a>
-      </p>
+    `,
+    cta: { text: "Register Now", url: registrationUrl },
+    footerHtml: `
       <img src="${qrPublicUrl}" alt="Registration QR code" width="160" height="160" />
       <p style="color: #737373; font-size: 12px;">${registrationUrl}</p>
-    </div>
-  `.trim();
+    `,
+  });
 
   // Unlayer's visual editor only ever initializes from unlayer_design_json --
   // it can't reverse-engineer a design from arbitrary HTML. Without this, the

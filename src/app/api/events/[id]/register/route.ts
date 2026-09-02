@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase";
 import { lookupEmployeeByCosid } from "@/lib/employees";
 import { sendTransactionalEmail } from "@/lib/sendgrid";
+import { buildEventEmailHtml } from "@/lib/event-email";
 import type { Event, EventField } from "@/lib/types";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -128,15 +129,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await sendTransactionalEmail({
       to: employee.email,
       subject: `Confirm your registration: ${event.name}`,
-      html: `
-        <p>Hi ${employee.name.split(" ")[0]},</p>
-        <p>You (or someone using your COSID) registered for <strong>${event.name}</strong>${
-          status === "waitlisted" ? " and are currently on the waitlist" : ""
-        }. Click below to confirm this is really you within the next 72 hours, or the registration will be
-        automatically cancelled.</p>
-        <p><a href="${confirmUrl}" style="background:#171717;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;">Confirm registration</a></p>
-        <p style="color:#737373;font-size:12px;">${confirmUrl}</p>
-      `,
+      html: buildEventEmailHtml({
+        eventName: event.name,
+        bodyHtml: `
+          <p>Hi ${employee.name.split(" ")[0]},</p>
+          <p>You (or someone using your COSID) registered for <strong>${event.name}</strong>${
+            status === "waitlisted" ? " and are currently on the waitlist" : ""
+          }. Click below to confirm this is really you within the next 72 hours, or the registration will be
+          automatically cancelled.</p>
+        `,
+        cta: { text: "Confirm registration", url: confirmUrl },
+        footerHtml: `<p style="color: #737373; font-size: 12px;">${confirmUrl}</p>`,
+      }),
     });
   } catch (err) {
     // The registration itself succeeded; a failed confirmation email

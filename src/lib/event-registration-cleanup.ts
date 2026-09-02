@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase";
 import { sendTransactionalEmail } from "@/lib/sendgrid";
+import { buildEventEmailHtml } from "@/lib/event-email";
 import type { EventRegistration } from "@/lib/types";
 
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
@@ -46,7 +47,10 @@ async function promoteNextWaitlisted(
     await sendTransactionalEmail({
       to: next.verified_email,
       subject: `You're off the waitlist: ${eventName}`,
-      html: `<p>Hi ${firstName(next.name)},</p><p>A spot opened up for <strong>${eventName}</strong> and you've been moved from the waitlist to confirmed. See you there!</p>`,
+      html: buildEventEmailHtml({
+        eventName,
+        bodyHtml: `<p>Hi ${firstName(next.name)},</p><p>A spot opened up for <strong>${eventName}</strong> and you've been moved from the waitlist to confirmed. See you there!</p>`,
+      }),
     });
   } catch (err) {
     console.error(`[event-registration-cleanup] Failed to send waitlist-promotion email for ${next.id}:`, err);
@@ -82,9 +86,12 @@ export async function processUnconfirmedRegistrations(): Promise<void> {
       await sendTransactionalEmail({
         to: reg.verified_email,
         subject: `Registration cancelled: ${eventName}`,
-        html: `<p>Hi ${firstName(reg.name)},</p><p>Your registration for <strong>${eventName}</strong> wasn't
-          confirmed within 72 hours, so it has been automatically cancelled. If you'd still like to attend,
-          you're welcome to register again.</p>`,
+        html: buildEventEmailHtml({
+          eventName,
+          bodyHtml: `<p>Hi ${firstName(reg.name)},</p><p>Your registration for <strong>${eventName}</strong> wasn't
+            confirmed within 72 hours, so it has been automatically cancelled. If you'd still like to attend,
+            you're welcome to register again.</p>`,
+        }),
       });
     } catch (err) {
       console.error(`[event-registration-cleanup] Failed to send cancellation email for ${reg.id}:`, err);
