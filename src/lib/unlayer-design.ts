@@ -94,6 +94,27 @@ function imageContent(url: string, width: number, height: number) {
   };
 }
 
+function htmlContent(html: string) {
+  return {
+    id: randId(),
+    type: "html",
+    values: {
+      html,
+      synced: { id: randId(), dirty: false },
+      _meta: { htmlID: `u_content_html_${randId()}`, htmlClassNames: "u_content_html" },
+      anchor: "",
+      locked: false,
+      hideable: true,
+      deletable: true,
+      draggable: true,
+      selectable: true,
+      duplicatable: true,
+      containerPadding: "0px",
+      displayCondition: null,
+    },
+  };
+}
+
 function row(contents: unknown[]) {
   return {
     id: randId(),
@@ -164,6 +185,36 @@ export function buildEventInviteDesign({
         contentAlign: "center",
         contentWidth: "480px",
         backgroundColor: "#F7F8F9",
+        preheaderText: "",
+      },
+      footers: [],
+      headers: [],
+    },
+    schemaVersion: 26,
+  };
+}
+
+/**
+ * Wraps an imported HTML email (e.g. exported from Outlook) as a single
+ * Unlayer "html" content block, so it loads into the visual editor instead
+ * of leaving the canvas blank. The imported markup itself is only editable
+ * via that block's own "Edit HTML" source view, not drag-and-drop -- Unlayer
+ * has no way to reverse-engineer arbitrary HTML into separate blocks -- but
+ * other blocks can still be dragged in around it, and the whole design saves
+ * and sends exactly like any other campaign from here on.
+ */
+export function buildImportedHtmlDesign(html: string) {
+  return {
+    body: {
+      id: randId(),
+      rows: [row([htmlContent(html)])],
+      values: {
+        _meta: { htmlID: "u_body", htmlClassNames: "u_body" },
+        textColor: "#000000",
+        fontFamily: { label: "Arial", value: "arial,helvetica,sans-serif" },
+        contentAlign: "center",
+        contentWidth: "600px",
+        backgroundColor: "#FFFFFF",
         preheaderText: "",
       },
       footers: [],

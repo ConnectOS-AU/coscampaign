@@ -6,6 +6,8 @@ import EmailEditor, { type EditorRef, type EmailEditorProps } from "react-email-
 import type { Campaign, EmailTemplate, LibraryImage } from "@/lib/types";
 import type { Sender, SuppressionGroup } from "@/lib/sendgrid";
 import { emptyEmployeeFilter, type EmployeeFilterOptions } from "@/lib/employees";
+import { buildImportedHtmlDesign } from "@/lib/unlayer-design";
+import { parseEml, type InlineAsset } from "@/lib/eml-parser";
 import { saveCampaignDraft } from "../../actions";
 import { saveTemplate } from "../../../templates/actions";
 import { ImagePickerModal } from "./image-picker-modal";
@@ -53,8 +55,10 @@ export function CampaignEditor({
 }: Props) {
   const router = useRouter();
   const editorRef = useRef<EditorRef>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
   const [selectImageDone, setSelectImageDone] = useState<SelectImageDone | null>(null);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const [name, setName] = useState(campaign.name);
   const [subject, setSubject] = useState(campaign.subject ?? "");
@@ -254,6 +258,77 @@ export function CampaignEditor({
     editorRef.current.editor.loadDesign(template.unlayer_design_json as never);
   }
 
+  // Uploads each inline (cid:) image an .eml carried -- e.g. an embedded
+  // logo or signature graphic -- through the same image endpoint the
+  // editor's own upload button uses, then rewrites cid: references in the
+  // HTML to the resulting public URLs. Best-effort: an image that fails to
+  // upload is just left as a broken cid: reference rather than failing the
+  // whole import.
+  async function resolveInlineImages(html: string, assets: InlineAsset[]): Promise<string> {
+    let result = html;
+    for (const asset of assets) {
+      try {
+        const bytes = Uint8Array.from(atob(asset.base64), (c) => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type: asset.contentType });
+        const ext = asset.contentType.split("/")[1] || "png";
+        const formData = new FormData();
+        formData.append("file", blob, `${asset.contentId}.${ext}`);
+        const res = await fetch("/api/images", { method: "POST", body: formData });
+        const body = await res.json();
+        if (body.image?.public_url) {
+          result = result.split(`cid:${asset.contentId}`).join(body.image.public_url);
+        }
+      } catch {
+        // Leave the cid: reference as-is; not fatal to the rest of the import.
+      }
+    }
+    return result;
+  }
+
+  async function handleImportFile(file: File) {
+    if (!window.confirm(`Import "${file.name}"? This replaces the current design in the editor.`)) return;
+
+    setImporting(true);
+    setMessage(null);
+    try {
+      const raw = await file.text();
+      const isEml = file.name.toLowerCase().endsWith(".eml");
+
+      let html: string | null;
+      let parsedSubject: string | null = null;
+      if (isEml) {
+        const parsed = parseEml(raw);
+        html = parsed.html ?? (parsed.text ? `<pre>${parsed.text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>` : null);
+        parsedSubject = parsed.subject;
+        if (html && parsed.inlineAssets.length > 0) {
+          html = await resolveInlineImages(html, parsed.inlineAssets);
+        }
+      } else {
+        html = raw;
+      }
+
+      if (!html) {
+        setMessage({ type: "error", text: "Couldn't find any HTML content in that file." });
+        return;
+      }
+      if (!editorRef.current?.editor) {
+        setMessage({ type: "error", text: "Editor isn't ready yet -- try again in a moment." });
+        return;
+      }
+
+      editorRef.current.editor.loadDesign(buildImportedHtmlDesign(html) as never);
+      if (parsedSubject && !subject.trim()) setSubject(parsedSubject);
+      setMessage({
+        type: "success",
+        text: `Imported "${file.name}" as one HTML block. Use the block's edit icon to tweak its source, or drag other blocks in around it.`,
+      });
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Failed to import file" });
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -263,6 +338,24 @@ export function CampaignEditor({
           className="w-full max-w-md rounded-md border border-transparent bg-transparent px-1 text-2xl font-semibold text-neutral-900 hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
         />
         <div className="flex items-center gap-2">
+          <input
+            ref={importFileInputRef}
+            type="file"
+            accept=".html,.htm,.eml"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) handleImportFile(file);
+            }}
+          />
+          <button
+            onClick={() => importFileInputRef.current?.click()}
+            disabled={importing}
+            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+          >
+            {importing ? "Importing..." : "Import HTML/EML"}
+          </button>
           <select
             value=""
             onChange={(e) => handleLoadTemplate(e.target.value)}
