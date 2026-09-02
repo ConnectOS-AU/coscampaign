@@ -6,6 +6,7 @@ import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { generateQrCodeDataUrl } from "@/lib/qrcode";
+import { buildEventInviteDesign } from "@/lib/unlayer-design";
 import type { Event, EventFieldType, EventInviteMode, EventStatus } from "@/lib/types";
 
 const IMAGE_BUCKET = "campaign-images";
@@ -179,12 +180,26 @@ export async function createInviteCampaignForEvent({ eventId, origin }: { eventI
     </div>
   `.trim();
 
+  // Unlayer's visual editor only ever initializes from unlayer_design_json --
+  // it can't reverse-engineer a design from arbitrary HTML. Without this, the
+  // editor would show a blank canvas (no QR code, no button, nothing usable)
+  // even though html_content has real content, since nothing populated the
+  // design the WYSIWYG builder actually renders from.
+  const design = buildEventInviteDesign({
+    eventName: event.name,
+    details,
+    description: event.description,
+    registrationUrl,
+    qrPublicUrl,
+  });
+
   const { data: campaign, error: campaignError } = await supabase
     .from("marketing_email_campaigns")
     .insert({
       name: `Invite: ${event.name}`,
       subject: `You're invited: ${event.name}`,
       html_content: html,
+      unlayer_design_json: design,
       created_by: session?.userId ?? null,
     })
     .select("id")
