@@ -115,9 +115,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  const origin = new URL(request.url).origin;
-  const confirmUrl = `${origin}/e/${id}/confirm/${registration.id}`;
   try {
+    // request.url reflects whatever origin the Node process actually sees,
+    // which behind nginx/Cloudflare is the internal upstream address (e.g.
+    // localhost:3000), not the public domain -- use the same env var the
+    // background workers rely on for the same reason (see campaign-queue.ts).
+    const origin = process.env.NEXT_PUBLIC_APP_URL;
+    if (!origin) {
+      throw new Error("NEXT_PUBLIC_APP_URL is not set -- required to build the confirmation link");
+    }
+    const confirmUrl = `${origin}/e/${id}/confirm/${registration.id}`;
     await sendTransactionalEmail({
       to: employee.email,
       subject: `Confirm your registration: ${event.name}`,
