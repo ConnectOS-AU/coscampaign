@@ -126,6 +126,32 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
   const notOpened = recipients.filter((r) => r.delivered && !r.opened).map((r) => r.email);
   const notReceived = recipients.filter((r) => !r.delivered).map((r) => r.email);
 
+  // Recipients are only ever known by email at this point (tracking events /
+  // pixels carry no employee identifier) -- look each one up against the
+  // employee directory to attach Client Name and COSID where they match.
+  const { data: employeeMatches } =
+    recipients.length > 0
+      ? await supabase
+          .from("cosphere_active_employees")
+          .select("office_email, client_name, employee_id")
+          .in(
+            "office_email",
+            recipients.map((r) => r.email),
+          )
+      : { data: [] as { office_email: string; client_name: string | null; employee_id: string }[] };
+
+  const employeeByEmail = new Map(
+    (employeeMatches ?? []).map((e) => [e.office_email.toLowerCase(), e]),
+  );
+  const recipientsWithIdentity = recipients.map((r) => {
+    const match = employeeByEmail.get(r.email.toLowerCase());
+    return {
+      ...r,
+      clientName: match?.client_name ?? null,
+      cosid: match?.employee_id ?? null,
+    };
+  });
+
   const activity: ActivityRow[] = [
     ...allEvents.map((e) => ({
       key: e.id,
@@ -199,6 +225,8 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
             <thead className="sticky top-0 border-b border-neutral-200 bg-neutral-50 text-left text-neutral-500">
               <tr>
                 <th className="px-4 py-2 font-medium">Recipient</th>
+                <th className="px-4 py-2 font-medium">Client</th>
+                <th className="px-4 py-2 font-medium">COSID</th>
                 <th className="px-4 py-2 font-medium">Delivered</th>
                 <th className="px-4 py-2 font-medium">Opened</th>
                 <th className="px-4 py-2 font-medium">Clicked</th>
@@ -206,11 +234,13 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {[...recipients]
+              {[...recipientsWithIdentity]
                 .sort((a, b) => (b.readDepthPct ?? -1) - (a.readDepthPct ?? -1))
                 .map((r) => (
                   <tr key={r.email}>
                     <td className="px-4 py-2 text-neutral-700">{r.email}</td>
+                    <td className="px-4 py-2 text-neutral-500">{r.clientName ?? "—"}</td>
+                    <td className="px-4 py-2 text-neutral-500">{r.cosid ?? "—"}</td>
                     <td className="px-4 py-2 text-neutral-500">{r.bounced ? "bounced" : r.delivered ? "yes" : "—"}</td>
                     <td className="px-4 py-2 text-neutral-500">{r.opened ? "yes" : "—"}</td>
                     <td className="px-4 py-2 text-neutral-500">{r.clicked ? "yes" : "—"}</td>
@@ -233,7 +263,7 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
                 ))}
               {recipients.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-neutral-500">
+                  <td colSpan={7} className="px-4 py-6 text-center text-neutral-500">
                     No recipient activity recorded yet.
                   </td>
                 </tr>
@@ -284,27 +314,34 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
             <thead className="border-b border-neutral-200 bg-neutral-50 text-left text-neutral-500">
               <tr>
                 <th className="px-4 py-2 font-medium">Recipient</th>
+                <th className="px-4 py-2 font-medium">Client</th>
+                <th className="px-4 py-2 font-medium">COSID</th>
                 <th className="px-4 py-2 font-medium">Event</th>
                 <th className="px-4 py-2 font-medium">URL</th>
                 <th className="px-4 py-2 font-medium">When</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {activity.slice(0, 150).map((e) => (
-                <tr key={e.key}>
-                  <td className="px-4 py-2 text-neutral-700">{e.contact_email}</td>
-                  <td className="px-4 py-2 text-neutral-700">{e.label}</td>
-                  <td className="max-w-xs truncate px-4 py-2 text-neutral-500" title={e.url ?? undefined}>
-                    {e.url ?? "—"}
-                  </td>
-                  <td className="px-4 py-2 text-neutral-500">
-                    {e.when ? new Date(e.when).toLocaleString() : "—"}
-                  </td>
-                </tr>
-              ))}
+              {activity.slice(0, 150).map((e) => {
+                const match = e.contact_email ? employeeByEmail.get(e.contact_email.toLowerCase()) : undefined;
+                return (
+                  <tr key={e.key}>
+                    <td className="px-4 py-2 text-neutral-700">{e.contact_email}</td>
+                    <td className="px-4 py-2 text-neutral-500">{match?.client_name ?? "—"}</td>
+                    <td className="px-4 py-2 text-neutral-500">{match?.employee_id ?? "—"}</td>
+                    <td className="px-4 py-2 text-neutral-700">{e.label}</td>
+                    <td className="max-w-xs truncate px-4 py-2 text-neutral-500" title={e.url ?? undefined}>
+                      {e.url ?? "—"}
+                    </td>
+                    <td className="px-4 py-2 text-neutral-500">
+                      {e.when ? new Date(e.when).toLocaleString() : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
               {activity.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-neutral-500">
+                  <td colSpan={6} className="px-4 py-6 text-center text-neutral-500">
                     No tracking events yet. Make sure the SendGrid Event Webhook is configured and pointed at
                     /api/webhooks/sendgrid.
                   </td>
