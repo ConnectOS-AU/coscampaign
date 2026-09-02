@@ -151,6 +151,7 @@ export type Event = {
   starts_at: string | null;
   ends_at: string | null;
   banner_image_url: string | null;
+  accent_color: string | null;
   capacity: number | null;
   invite_mode: EventInviteMode;
   status: EventStatus;
@@ -159,7 +160,18 @@ export type Event = {
   updated_at: string;
 };
 
-export type EventFieldType = "text" | "multiple_choice";
+export type EventFieldType =
+  | "short_text"
+  | "paragraph"
+  | "email"
+  | "phone"
+  | "number"
+  | "date"
+  | "dropdown"
+  | "multiple_choice"
+  | "checkboxes"
+  | "yes_no"
+  | "section";
 
 export type EventField = {
   id: string;

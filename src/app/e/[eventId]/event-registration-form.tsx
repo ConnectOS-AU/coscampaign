@@ -3,14 +3,33 @@
 import { useState } from "react";
 import type { EventField } from "@/lib/types";
 
-export function EventRegistrationForm({ eventId, fields }: { eventId: string; fields: EventField[] }) {
+const YES_NO_OPTIONS = ["Yes", "No"];
+
+export function EventRegistrationForm({
+  eventId,
+  fields,
+  accentColor,
+}: {
+  eventId: string;
+  fields: EventField[];
+  accentColor: string | null;
+}) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [cosid, setCosid] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [checkboxAnswers, setCheckboxAnswers] = useState<Record<string, string[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ status: "confirmed" | "waitlisted"; verifiedEmail: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleCheckbox(fieldId: string, option: string) {
+    setCheckboxAnswers((prev) => {
+      const current = prev[fieldId] ?? [];
+      const next = current.includes(option) ? current.filter((o) => o !== option) : [...current, option];
+      return { ...prev, [fieldId]: next };
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,7 +43,12 @@ export function EventRegistrationForm({ eventId, fields }: { eventId: string; fi
           name,
           email,
           cosid,
-          answers: fields.map((f) => ({ field_id: f.id, answer_text: answers[f.id] ?? "" })),
+          answers: fields
+            .filter((f) => f.field_type !== "section")
+            .map((f) => ({
+              field_id: f.id,
+              answer_text: f.field_type === "checkboxes" ? (checkboxAnswers[f.id] ?? []) : (answers[f.id] ?? ""),
+            })),
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -88,49 +112,127 @@ export function EventRegistrationForm({ eventId, fields }: { eventId: string; fi
         </p>
       </div>
 
-      {fields.map((f) => (
-        <div key={f.id} className="space-y-1.5">
-          <label className="text-sm font-medium text-neutral-800">
-            {f.field_label}
-            {f.required && <span className="text-red-600"> *</span>}
-          </label>
-
-          {f.field_type === "text" && (
-            <textarea
-              value={answers[f.id] ?? ""}
-              onChange={(e) => setAnswers((prev) => ({ ...prev, [f.id]: e.target.value }))}
-              required={f.required}
-              rows={2}
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
-            />
-          )}
-
-          {f.field_type === "multiple_choice" && (
-            <div className="space-y-1">
-              {(f.options ?? []).map((opt) => (
-                <label key={opt} className="flex items-center gap-2 text-sm text-neutral-700">
-                  <input
-                    type="radio"
-                    name={f.id}
-                    value={opt}
-                    required={f.required}
-                    checked={answers[f.id] === opt}
-                    onChange={() => setAnswers((prev) => ({ ...prev, [f.id]: opt }))}
-                  />
-                  {opt}
-                </label>
-              ))}
+      {fields.map((f) => {
+        if (f.field_type === "section") {
+          return (
+            <div key={f.id} className="border-t border-neutral-200 pt-4">
+              <h2 className="text-sm font-semibold text-neutral-900">{f.field_label}</h2>
             </div>
-          )}
-        </div>
-      ))}
+          );
+        }
+
+        return (
+          <div key={f.id} className="space-y-1.5">
+            <label className="text-sm font-medium text-neutral-800">
+              {f.field_label}
+              {f.required && <span className="text-red-600"> *</span>}
+            </label>
+
+            {(f.field_type === "short_text" || f.field_type === "email" || f.field_type === "phone") && (
+              <input
+                type={f.field_type === "email" ? "email" : f.field_type === "phone" ? "tel" : "text"}
+                value={answers[f.id] ?? ""}
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                required={f.required}
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+              />
+            )}
+
+            {f.field_type === "number" && (
+              <input
+                type="number"
+                value={answers[f.id] ?? ""}
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                required={f.required}
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+              />
+            )}
+
+            {f.field_type === "date" && (
+              <input
+                type="date"
+                value={answers[f.id] ?? ""}
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                required={f.required}
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+              />
+            )}
+
+            {f.field_type === "paragraph" && (
+              <textarea
+                value={answers[f.id] ?? ""}
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                required={f.required}
+                rows={3}
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+              />
+            )}
+
+            {f.field_type === "dropdown" && (
+              <select
+                value={answers[f.id] ?? ""}
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                required={f.required}
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+              >
+                <option value="" disabled>
+                  Select...
+                </option>
+                {(f.options ?? []).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {(f.field_type === "multiple_choice" || f.field_type === "yes_no") && (
+              <div className="space-y-1">
+                {(f.field_type === "yes_no" ? YES_NO_OPTIONS : f.options ?? []).map((opt) => (
+                  <label key={opt} className="flex items-center gap-2 text-sm text-neutral-700">
+                    <input
+                      type="radio"
+                      name={f.id}
+                      value={opt}
+                      required={f.required}
+                      checked={answers[f.id] === opt}
+                      onChange={() => setAnswers((prev) => ({ ...prev, [f.id]: opt }))}
+                      style={accentColor ? { accentColor } : undefined}
+                    />
+                    {opt}
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {f.field_type === "checkboxes" && (
+              <div className="space-y-1">
+                {(f.options ?? []).map((opt) => (
+                  <label key={opt} className="flex items-center gap-2 text-sm text-neutral-700">
+                    <input
+                      type="checkbox"
+                      checked={(checkboxAnswers[f.id] ?? []).includes(opt)}
+                      onChange={() => toggleCheckbox(f.id, opt)}
+                      style={accentColor ? { accentColor } : undefined}
+                    />
+                    {opt}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+        style={accentColor ? { backgroundColor: accentColor } : undefined}
+        className={`w-full rounded-md px-3 py-2 text-sm font-medium text-white disabled:opacity-50 ${
+          accentColor ? "hover:opacity-90" : "bg-neutral-900 hover:bg-neutral-800"
+        }`}
       >
         {submitting ? "Submitting..." : "Register"}
       </button>

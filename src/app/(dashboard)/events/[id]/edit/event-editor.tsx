@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Event, EventField, EventFieldType, EventInviteMode, EventStatus } from "@/lib/types";
 import { generateQrCodeDataUrl } from "@/lib/qrcode";
@@ -13,6 +13,24 @@ type DraftField = {
   options: string[];
   required: boolean;
 };
+
+const OPTIONS_FIELD_TYPES = new Set<EventFieldType>(["dropdown", "multiple_choice", "checkboxes"]);
+
+const FIELD_TYPE_LABELS: Record<EventFieldType, string> = {
+  short_text: "📝 Short text",
+  paragraph: "📄 Paragraph",
+  email: "✉️ Email",
+  phone: "📞 Phone",
+  number: "#️⃣ Number",
+  date: "📅 Date",
+  dropdown: "▾ Dropdown",
+  multiple_choice: "⚪ Multiple choice",
+  checkboxes: "☑️ Checkboxes",
+  yes_no: "✅ Yes/No",
+  section: "— Section heading",
+};
+
+const ACCENT_PRESETS = ["#171717", "#dc2626", "#ea580c", "#16a34a", "#2563eb", "#7c3aed", "#db2777"];
 
 function toDraft(f: EventField): DraftField {
   return { key: f.id, field_label: f.field_label, field_type: f.field_type, options: f.options ?? [], required: f.required };
@@ -30,6 +48,7 @@ function toDatetimeLocal(value: string | null): string {
 
 export function EventEditor({ event, initialFields }: { event: Event; initialFields: EventField[] }) {
   const router = useRouter();
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(event.name);
   const [description, setDescription] = useState(event.description ?? "");
   const [location, setLocation] = useState(event.location ?? "");
@@ -39,7 +58,11 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
   const [capacity, setCapacity] = useState(event.capacity?.toString() ?? "");
   const [inviteMode, setInviteMode] = useState<EventInviteMode>(event.invite_mode);
   const [status, setStatus] = useState<EventStatus>(event.status);
+  const [bannerImageUrl, setBannerImageUrl] = useState(event.banner_image_url);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [accentColor, setAccentColor] = useState(event.accent_color ?? "#171717");
   const [fields, setFields] = useState<DraftField[]>(initialFields.map(toDraft));
+  const [draggedKey, setDraggedKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -58,22 +81,11 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
   }, [event.id]);
 
   function addField() {
-    setFields((prev) => [...prev, { key: newKey(), field_label: "", field_type: "text", options: [], required: false }]);
+    setFields((prev) => [...prev, { key: newKey(), field_label: "", field_type: "short_text", options: [], required: false }]);
   }
 
   function removeField(key: string) {
     setFields((prev) => prev.filter((f) => f.key !== key));
-  }
-
-  function moveField(key: string, direction: -1 | 1) {
-    setFields((prev) => {
-      const index = prev.findIndex((f) => f.key === key);
-      const target = index + direction;
-      if (index === -1 || target < 0 || target >= prev.length) return prev;
-      const next = [...prev];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
   }
 
   function updateField(key: string, patch: Partial<DraftField>) {
@@ -96,6 +108,38 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
     );
   }
 
+  function handleDrop(targetKey: string) {
+    setFields((prev) => {
+      if (!draggedKey || draggedKey === targetKey) return prev;
+      const fromIndex = prev.findIndex((f) => f.key === draggedKey);
+      const toIndex = prev.findIndex((f) => f.key === targetKey);
+      if (fromIndex === -1 || toIndex === -1) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+    setDraggedKey(null);
+  }
+
+  async function handleBannerUpload(file: File) {
+    setUploadingBanner(true);
+    setMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", `${name} — banner`);
+      const res = await fetch("/api/images", { method: "POST", body: formData });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Failed to upload banner image");
+      setBannerImageUrl(body.image.public_url);
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Failed to upload banner image" });
+    } finally {
+      setUploadingBanner(false);
+    }
+  }
+
   async function handleSave() {
     setSaving(true);
     setMessage(null);
@@ -110,10 +154,12 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
         capacity: capacityEnabled && capacity ? Number(capacity) : null,
         invite_mode: inviteMode,
         status,
+        banner_image_url: bannerImageUrl,
+        accent_color: accentColor,
         fields: fields.map((f) => ({
           field_label: f.field_label,
           field_type: f.field_type,
-          options: f.field_type === "multiple_choice" ? f.options.filter((o) => o.trim()) : null,
+          options: OPTIONS_FIELD_TYPES.has(f.field_type) ? f.options.filter((o) => o.trim()) : null,
           required: f.required,
         })),
       });
@@ -154,7 +200,8 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
         <button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+          style={{ backgroundColor: accentColor }}
+          className="rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save"}
         </button>
@@ -163,6 +210,74 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
       {message && (
         <p className={`text-sm ${message.type === "error" ? "text-red-600" : "text-green-700"}`}>{message.text}</p>
       )}
+
+      <div className="space-y-3 rounded-lg border border-neutral-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-neutral-900">Appearance</h2>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-neutral-700">Banner image</label>
+            {bannerImageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={bannerImageUrl} alt="" className="h-28 w-full rounded-md object-cover" />
+            )}
+            <div className="flex items-center gap-2">
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleBannerUpload(file);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                onClick={() => bannerInputRef.current?.click()}
+                disabled={uploadingBanner}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+              >
+                {uploadingBanner ? "Uploading..." : bannerImageUrl ? "Replace image" : "Upload image"}
+              </button>
+              {bannerImageUrl && (
+                <button
+                  onClick={() => setBannerImageUrl(null)}
+                  className="text-xs text-neutral-500 hover:text-red-600"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-neutral-700">Accent color</label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {ACCENT_PRESETS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setAccentColor(c)}
+                  aria-label={c}
+                  style={{ backgroundColor: c }}
+                  className={`h-6 w-6 rounded-full border-2 ${accentColor === c ? "border-neutral-900" : "border-transparent"}`}
+                />
+              ))}
+              <input
+                type="color"
+                value={accentColor}
+                onChange={(e) => setAccentColor(e.target.value)}
+                className="h-6 w-8 cursor-pointer rounded border border-neutral-300"
+              />
+            </div>
+            <button
+              style={{ backgroundColor: accentColor }}
+              className="mt-1 rounded-md px-4 py-2 text-sm font-medium text-white"
+            >
+              Preview button
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 rounded-lg border border-neutral-200 bg-white p-4 md:grid-cols-2">
         <div className="space-y-1 md:col-span-2">
@@ -267,16 +382,31 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
             Add field
           </button>
         </div>
-        <p className="text-xs text-neutral-500">Name and email are always collected. Add any extra fields below.</p>
+        <p className="text-xs text-neutral-500">
+          Name, email, and COSID are always collected. Add any extra fields below, and drag to reorder.
+        </p>
 
         {fields.map((f, i) => (
-          <div key={f.key} className="space-y-2 rounded-md border border-neutral-200 p-3">
+          <div
+            key={f.key}
+            draggable
+            onDragStart={() => setDraggedKey(f.key)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => handleDrop(f.key)}
+            onDragEnd={() => setDraggedKey(null)}
+            className={`space-y-2 rounded-md border p-3 ${
+              f.field_type === "section" ? "border-dashed border-neutral-300 bg-neutral-50" : "border-neutral-200"
+            } ${draggedKey === f.key ? "opacity-40" : ""}`}
+          >
             <div className="flex items-start gap-2">
+              <span className="mt-2 cursor-grab text-xs text-neutral-400" title="Drag to reorder">
+                ⠿
+              </span>
               <span className="mt-2 text-xs text-neutral-400">{i + 1}.</span>
               <input
                 value={f.field_label}
                 onChange={(e) => updateField(f.key, { field_label: e.target.value })}
-                placeholder="Field label"
+                placeholder={f.field_type === "section" ? "Section heading" : "Field label"}
                 className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
               />
               <select
@@ -284,29 +414,28 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
                 onChange={(e) => updateField(f.key, { field_type: e.target.value as EventFieldType })}
                 className="rounded-md border border-neutral-300 px-2 py-2 text-sm focus:border-neutral-500 focus:outline-none"
               >
-                <option value="text">Text</option>
-                <option value="multiple_choice">Multiple choice</option>
+                {(Object.keys(FIELD_TYPE_LABELS) as EventFieldType[]).map((type) => (
+                  <option key={type} value={type}>
+                    {FIELD_TYPE_LABELS[type]}
+                  </option>
+                ))}
               </select>
-              <label className="mt-2 flex items-center gap-1 text-xs text-neutral-600">
-                <input
-                  type="checkbox"
-                  checked={f.required}
-                  onChange={(e) => updateField(f.key, { required: e.target.checked })}
-                />
-                Required
-              </label>
-              <button onClick={() => moveField(f.key, -1)} className="px-1 text-neutral-400 hover:text-neutral-900">
-                ↑
-              </button>
-              <button onClick={() => moveField(f.key, 1)} className="px-1 text-neutral-400 hover:text-neutral-900">
-                ↓
-              </button>
+              {f.field_type !== "section" && (
+                <label className="mt-2 flex items-center gap-1 text-xs text-neutral-600">
+                  <input
+                    type="checkbox"
+                    checked={f.required}
+                    onChange={(e) => updateField(f.key, { required: e.target.checked })}
+                  />
+                  Required
+                </label>
+              )}
               <button onClick={() => removeField(f.key)} className="px-1 text-xs text-neutral-400 hover:text-red-600">
                 Remove
               </button>
             </div>
 
-            {f.field_type === "multiple_choice" && (
+            {OPTIONS_FIELD_TYPES.has(f.field_type) && (
               <div className="ml-6 space-y-1.5">
                 {f.options.map((opt, oi) => (
                   <div key={oi} className="flex items-center gap-2">

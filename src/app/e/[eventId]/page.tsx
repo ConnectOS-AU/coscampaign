@@ -50,7 +50,7 @@ export default async function EventRegistrationPage({ params }: { params: Promis
           {event.location && <p>{event.location}</p>}
         </div>
         {event.description && <p className="mt-3 text-sm text-neutral-600">{event.description}</p>}
-        <EventRegistrationForm eventId={eventId} fields={fields ?? []} />
+        <EventRegistrationForm eventId={eventId} fields={fields ?? []} accentColor={event.accent_color} />
       </div>
     </div>
   );

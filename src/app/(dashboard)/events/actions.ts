@@ -35,6 +35,8 @@ export type SaveEventFieldInput = {
   required: boolean;
 };
 
+const OPTIONS_FIELD_TYPES = new Set<EventFieldType>(["dropdown", "multiple_choice", "checkboxes"]);
+
 export async function saveEvent(input: {
   id: string;
   name: string;
@@ -45,6 +47,8 @@ export async function saveEvent(input: {
   capacity: number | null;
   invite_mode: EventInviteMode;
   status: EventStatus;
+  banner_image_url: string | null;
+  accent_color: string | null;
   fields: SaveEventFieldInput[];
 }) {
   const session = await getSession();
@@ -63,6 +67,8 @@ export async function saveEvent(input: {
       capacity: input.capacity,
       invite_mode: input.invite_mode,
       status: input.status,
+      banner_image_url: input.banner_image_url,
+      accent_color: input.accent_color,
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.id);
@@ -87,8 +93,8 @@ export async function saveEvent(input: {
         position: i,
         field_label: f.field_label,
         field_type: f.field_type,
-        options: f.field_type === "multiple_choice" ? f.options : null,
-        required: f.required,
+        options: OPTIONS_FIELD_TYPES.has(f.field_type) ? f.options : null,
+        required: f.field_type === "section" ? false : f.required,
       })),
     );
     if (insertError) {

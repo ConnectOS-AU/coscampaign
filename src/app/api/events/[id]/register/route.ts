@@ -50,15 +50,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .eq("event_id", id)
     .returns<EventField[]>();
 
+  // A checkboxes field submits an array of selected options rather than a
+  // single string -- joined here into the same answer_text column the way
+  // every other field type stores its answer, no schema change needed for
+  // what's a rarely-multi-valued field.
   const answersByFieldId = new Map<string, string>();
   for (const a of answers) {
     if (typeof a === "object" && a !== null && typeof (a as { field_id?: unknown }).field_id === "string") {
       const answerText = (a as { answer_text?: unknown }).answer_text;
-      answersByFieldId.set((a as { field_id: string }).field_id, typeof answerText === "string" ? answerText : "");
+      const value = Array.isArray(answerText)
+        ? answerText.filter((v): v is string => typeof v === "string").join("; ")
+        : typeof answerText === "string"
+          ? answerText
+          : "";
+      answersByFieldId.set((a as { field_id: string }).field_id, value);
     }
   }
 
   for (const field of fields ?? []) {
+    if (field.field_type === "section") continue; // a heading/divider, not a real input
     if (field.required && !answersByFieldId.get(field.id)?.trim()) {
       return NextResponse.json({ error: `"${field.field_label}" is required` }, { status: 400 });
     }

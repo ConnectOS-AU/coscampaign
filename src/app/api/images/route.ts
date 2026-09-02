@@ -20,10 +20,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const session = await getSession();
-  // Also allowed for anyone editing a campaign -- Unlayer's inline "Upload
+  // Also allowed for anyone editing a campaign (Unlayer's inline "Upload
   // Image" action hits this same endpoint from the editor, not just the
-  // dedicated Images library page.
-  if (!hasPermission(session, "manage_images") && !hasPermission(session, "manage_campaigns")) {
+  // dedicated Images library page) or an event (banner image upload).
+  const allowed =
+    hasPermission(session, "manage_images") ||
+    hasPermission(session, "manage_campaigns") ||
+    hasPermission(session, "manage_events");
+  if (!allowed) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const supabase = createServiceRoleClient();
