@@ -64,9 +64,15 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
   };
 
   const clickCountsByUrl = new Map<string, number>();
+  const clickersByUrl = new Map<string, Set<string>>();
   for (const e of allEvents) {
     if (e.event_type === "click" && e.url) {
       clickCountsByUrl.set(e.url, (clickCountsByUrl.get(e.url) ?? 0) + 1);
+      if (e.contact_email) {
+        const clickers = clickersByUrl.get(e.url) ?? new Set<string>();
+        clickers.add(e.contact_email);
+        clickersByUrl.set(e.url, clickers);
+      }
     }
   }
 
@@ -281,23 +287,49 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
               <tr>
                 <th className="px-4 py-2 font-medium">URL</th>
                 <th className="px-4 py-2 font-medium">Clicks</th>
+                <th className="px-4 py-2 font-medium">Clicked by</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {(links ?? [])
                 .map((l) => ({ ...l, clicks: clickCountsByUrl.get(l.url) ?? 0 }))
                 .sort((a, b) => b.clicks - a.clicks)
-                .map((l) => (
-                  <tr key={l.id}>
-                    <td className="max-w-md truncate px-4 py-2 text-neutral-700" title={l.url}>
-                      {l.label ?? l.url}
-                    </td>
-                    <td className="px-4 py-2 text-neutral-500">{l.clicks}</td>
-                  </tr>
-                ))}
+                .map((l) => {
+                  const clickers = [...(clickersByUrl.get(l.url) ?? [])];
+                  return (
+                    <tr key={l.id}>
+                      <td className="max-w-md truncate px-4 py-2 text-neutral-700" title={l.url}>
+                        {l.label ?? l.url}
+                      </td>
+                      <td className="px-4 py-2 text-neutral-500">{l.clicks}</td>
+                      <td className="px-4 py-2 text-neutral-500">
+                        {clickers.length === 0 ? (
+                          "—"
+                        ) : (
+                          <ul className="space-y-1">
+                            {clickers.map((email) => {
+                              const match = employeeByEmail.get(email.toLowerCase());
+                              return (
+                                <li key={email}>
+                                  <span className="text-neutral-700">{email}</span>
+                                  {match && (
+                                    <span className="text-neutral-400">
+                                      {" "}
+                                      — {match.client_name ?? "—"} · {match.employee_id}
+                                    </span>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               {(links ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={2} className="px-4 py-6 text-center text-neutral-500">
+                  <td colSpan={3} className="px-4 py-6 text-center text-neutral-500">
                     No links tracked yet.
                   </td>
                 </tr>
