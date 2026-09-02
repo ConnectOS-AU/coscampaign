@@ -31,6 +31,17 @@ type Props = {
 type ImageUploadDone = (result: { progress?: number; url?: string }) => void;
 type SelectImageDone = (result: { url: string }) => void;
 
+// Surfaced in Unlayer's own "Merge Tags" insert menu (available on any text
+// block). The `value` is what actually lands in the exported HTML -- SendGrid
+// resolves {{first_name}}/{{last_name}} per-recipient at send time from the
+// contact's directory-sourced name (see buildContactUpserts in
+// src/lib/employees.ts), the same way {{email}} already works for read-depth
+// pixel tracking.
+const MERGE_TAGS = {
+  first_name: { name: "First name", value: "{{first_name}}", sample: "Alex" },
+  last_name: { name: "Last name", value: "{{last_name}}", sample: "Smith" },
+};
+
 export function CampaignEditor({
   campaign,
   senders,
@@ -432,7 +443,7 @@ export function CampaignEditor({
       </div>
 
       <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-        <EmailEditor ref={editorRef} onLoad={onLoad} minHeight="800px" />
+        <EmailEditor ref={editorRef} onLoad={onLoad} minHeight="800px" options={{ mergeTags: MERGE_TAGS }} />
       </div>
 
       {selectImageDone && (

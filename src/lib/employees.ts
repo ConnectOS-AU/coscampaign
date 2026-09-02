@@ -120,6 +120,47 @@ export async function searchEmployees(query: string): Promise<EmployeeSearchResu
   return results;
 }
 
+/**
+ * Looks up first/last name for a batch of emails against the employee
+ * directory, so SendGrid contacts can be upserted with real names attached
+ * -- that's what lets {{first_name}}/{{last_name}} merge tags in campaign
+ * content resolve per-recipient. Emails with no directory match are simply
+ * absent from the returned map (the caller falls back to email-only).
+ */
+export async function resolveEmployeeNamesByEmail(
+  emails: string[],
+): Promise<Map<string, { firstName: string | null; lastName: string | null }>> {
+  const map = new Map<string, { firstName: string | null; lastName: string | null }>();
+  if (emails.length === 0) return map;
+
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("cosphere_active_employees")
+    .select("office_email, first_name, last_name")
+    .in("office_email", emails)
+    .returns<{ office_email: string; first_name: string | null; last_name: string | null }[]>();
+
+  for (const row of data ?? []) {
+    map.set(row.office_email.toLowerCase(), { firstName: row.first_name, lastName: row.last_name });
+  }
+  return map;
+}
+
+/** Builds SendGrid contact-upsert payloads for a list of emails, attaching first/last name where the directory has a match. */
+export async function buildContactUpserts(
+  emails: string[],
+): Promise<{ email: string; first_name?: string; last_name?: string }[]> {
+  const namesByEmail = await resolveEmployeeNamesByEmail(emails);
+  return emails.map((email) => {
+    const name = namesByEmail.get(email.toLowerCase());
+    return {
+      email,
+      first_name: name?.firstName ?? undefined,
+      last_name: name?.lastName ?? undefined,
+    };
+  });
+}
+
 /** Resolves a COSID (employee_id, e.g. "COS0075") to the employee's verified name/email, for identity checks like event registration. */
 export async function lookupEmployeeByCosid(cosid: string): Promise<{ name: string; email: string } | null> {
   const normalized = cosid.trim().toUpperCase();

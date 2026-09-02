@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createList, upsertContactsToList } from "@/lib/sendgrid";
+import { buildContactUpserts } from "@/lib/employees";
 import type { Campaign } from "@/lib/types";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -48,7 +49,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // via sendgrid_pending_import_job_id, and the send queue (see
     // src/lib/campaign-queue.ts) waits for it once the user actually sends
     // this draft, the same way it does for every other recipient source.
-    const importJob = await upsertContactsToList(list.id, emails);
+    const contacts = await buildContactUpserts(emails);
+    const importJob = await upsertContactsToList(list.id, contacts);
 
     const { data: draft, error: insertError } = await supabase
       .from("marketing_email_campaigns")

@@ -167,12 +167,21 @@ export type ContactImportJob = {
   job_id: string;
 };
 
-export async function upsertContactsToList(listId: string, emails: string[]): Promise<ContactImportJob> {
+export type ContactUpsertInput = {
+  email: string;
+  first_name?: string;
+  last_name?: string;
+};
+
+// first_name/last_name land on the SendGrid Marketing contact as its
+// reserved fields, which is what makes {{first_name}}/{{last_name}} merge
+// tags in campaign content resolve per-recipient at send time.
+export async function upsertContactsToList(listId: string, contacts: ContactUpsertInput[]): Promise<ContactImportJob> {
   return sgFetch<ContactImportJob>("/marketing/contacts", {
     method: "PUT",
     body: JSON.stringify({
       list_ids: [listId],
-      contacts: emails.map((email) => ({ email })),
+      contacts,
     }),
   });
 }

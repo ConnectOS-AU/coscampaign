@@ -3,7 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createList, upsertContactsToList } from "@/lib/sendgrid";
-import { emptyEmployeeFilter, resolveEmployeeEmails } from "@/lib/employees";
+import { buildContactUpserts, emptyEmployeeFilter, resolveEmployeeEmails } from "@/lib/employees";
 import { resolveEventRegistrantEmails } from "@/lib/events";
 import type { Campaign } from "@/lib/types";
 
@@ -100,7 +100,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       } else {
         const name = `${campaign.name} (${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)})`;
         const list = await createList(name);
-        const importJob = await upsertContactsToList(list.id, emails);
+        const contacts = await buildContactUpserts(emails);
+        const importJob = await upsertContactsToList(list.id, contacts);
         sendgridListId = list.id;
         pendingImportJobId = importJob.job_id;
       }
