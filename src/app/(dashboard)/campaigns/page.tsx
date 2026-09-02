@@ -4,6 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import type { Campaign } from "@/lib/types";
+import { formatDate, formatDateTime } from "@/lib/format-date";
 import { createCampaign } from "./actions";
 import { DeleteCampaignButton } from "./delete-campaign-button";
 
@@ -34,7 +35,7 @@ function groupCampaigns(campaigns: CampaignRow[]): [string, CampaignRow[]][] {
   const groups = new Map<string, CampaignRow[]>();
   for (const c of rest) {
     const date = c.sent_at ?? c.scheduled_at;
-    const label = date ? new Date(date).toLocaleDateString("en-AU", { year: "numeric", month: "long", day: "numeric" }) : "Unknown date";
+    const label = date ? formatDate(date) : "Unknown date";
     const list = groups.get(label) ?? [];
     list.push(c);
     groups.set(label, list);
@@ -63,16 +64,26 @@ export default async function CampaignsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-neutral-900">Campaigns</h1>
-        {canManageCampaigns && (
-          <form action={createCampaign}>
-            <button
-              type="submit"
-              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+        <div className="flex items-center gap-2">
+          {canManageCampaigns && (
+            <a
+              href="/api/campaigns/export"
+              className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
             >
-              New campaign
-            </button>
-          </form>
-        )}
+              Export CSV
+            </a>
+          )}
+          {canManageCampaigns && (
+            <form action={createCampaign}>
+              <button
+                type="submit"
+                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+              >
+                New campaign
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600">Failed to load campaigns: {error.message}</p>}
@@ -113,7 +124,7 @@ export default async function CampaignsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-neutral-500">
-                      {new Date(c.updated_at).toLocaleString()}
+                      {formatDateTime(c.updated_at)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {canManageCampaigns && <DeleteCampaignButton id={c.id} status={c.status} />}

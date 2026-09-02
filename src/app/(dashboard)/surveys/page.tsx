@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import type { Survey } from "@/lib/types";
+import { formatDateTime } from "@/lib/format-date";
 import { createSurvey } from "./actions";
 import { DeleteSurveyButton } from "./delete-survey-button";
 
@@ -74,7 +75,7 @@ export default async function SurveysPage() {
                     {countBySurvey.get(s.id) ?? 0}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-neutral-500">{new Date(s.updated_at).toLocaleString("en-AU")}</td>
+                <td className="px-4 py-3 text-neutral-500">{formatDateTime(s.updated_at)}</td>
                 <td className="px-4 py-3 text-right">
                   <DeleteSurveyButton id={s.id} />
                 </td>

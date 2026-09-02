@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase";
 import type { Event, EventField } from "@/lib/types";
+import { formatDateTime } from "@/lib/format-date";
 import { EventRegistrationForm } from "./event-registration-form";
 
 export default async function EventRegistrationPage({ params }: { params: Promise<{ eventId: string }> }) {
@@ -46,7 +47,7 @@ export default async function EventRegistrationPage({ params }: { params: Promis
         )}
         <h1 className="text-xl font-semibold text-neutral-900">{event.name}</h1>
         <div className="mt-1 space-y-0.5 text-sm text-neutral-500">
-          {event.starts_at && <p>{new Date(event.starts_at).toLocaleString("en-AU")}</p>}
+          {event.starts_at && <p>{formatDateTime(event.starts_at)}</p>}
           {event.location && <p>{event.location}</p>}
         </div>
         {event.description && <p className="mt-3 text-sm text-neutral-600">{event.description}</p>}

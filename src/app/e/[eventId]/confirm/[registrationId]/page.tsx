@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase";
 import { buildEventIcs } from "@/lib/ics";
+import { formatDateTime } from "@/lib/format-date";
 import type { Event, EventRegistration } from "@/lib/types";
 
 export default async function ConfirmRegistrationPage({
@@ -46,7 +47,7 @@ export default async function ConfirmRegistrationPage({
           {alreadyConfirmed ? "You've already confirmed this registration." : "Registration confirmed!"}
         </p>
         <div className="mt-3 space-y-0.5 text-sm text-neutral-500">
-          {event.starts_at && <p>{new Date(event.starts_at).toLocaleString("en-AU")}</p>}
+          {event.starts_at && <p>{formatDateTime(event.starts_at)}</p>}
           {event.location && <p>{event.location}</p>}
         </div>
         {registration.status === "waitlisted" && (

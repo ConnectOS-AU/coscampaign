@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import type { Event, EventField, EventRegistration, EventRegistrationAnswer } from "@/lib/types";
+import { formatDateTime } from "@/lib/format-date";
 
 export default async function EventRegistrationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -58,11 +59,19 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-neutral-900">{event.name} — Registrations</h1>
-        <p className="text-sm text-neutral-500">
-          {confirmedCount} confirmed{waitlistedCount > 0 ? `, ${waitlistedCount} waitlisted` : ""}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-neutral-900">{event.name} — Registrations</h1>
+          <p className="text-sm text-neutral-500">
+            {confirmedCount} confirmed{waitlistedCount > 0 ? `, ${waitlistedCount} waitlisted` : ""}
+          </p>
+        </div>
+        <a
+          href={`/api/events/${id}/registrations/export`}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
+        >
+          Export CSV
+        </a>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white">
@@ -111,7 +120,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                     {answersByRegistration.get(r.id)?.get(f.id) ?? ""}
                   </td>
                 ))}
-                <td className="px-4 py-3 text-neutral-500">{new Date(r.registered_at).toLocaleString("en-AU")}</td>
+                <td className="px-4 py-3 text-neutral-500">{formatDateTime(r.registered_at)}</td>
               </tr>
             ))}
             {(registrations ?? []).length === 0 && (

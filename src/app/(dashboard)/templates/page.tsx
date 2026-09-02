@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase";
 import type { EmailTemplate } from "@/lib/types";
+import { formatDate } from "@/lib/format-date";
 import { createCampaignFromTemplate } from "./actions";
 import { DeleteTemplateButton } from "./delete-template-button";
 
@@ -29,7 +30,7 @@ export default async function TemplatesPage() {
               <h2 className="font-medium text-neutral-900">{t.name}</h2>
               {t.description && <p className="mt-1 text-sm text-neutral-500">{t.description}</p>}
               <p className="mt-2 text-xs text-neutral-400">
-                Updated {new Date(t.updated_at).toLocaleDateString()}
+                Updated {formatDate(t.updated_at)}
               </p>
             </div>
             <div className="mt-4 flex items-center justify-between">

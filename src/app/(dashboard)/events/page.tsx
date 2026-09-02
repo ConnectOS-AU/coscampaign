@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import type { Event } from "@/lib/types";
 import { getEventRegistrantCounts } from "@/lib/events";
+import { formatDateTime } from "@/lib/format-date";
 import { createEvent } from "./actions";
 import { DeleteEventButton } from "./delete-event-button";
 
@@ -78,7 +79,7 @@ export default async function EventsPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-neutral-500">
-                    {e.starts_at ? new Date(e.starts_at).toLocaleString("en-AU") : "—"}
+                    {e.starts_at ? formatDateTime(e.starts_at) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <DeleteEventButton id={e.id} />

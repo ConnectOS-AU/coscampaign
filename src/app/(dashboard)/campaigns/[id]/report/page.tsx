@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase";
 import type { Campaign, CampaignLink, EngagementPixel, TrackingEvent } from "@/lib/types";
 import { READ_DEPTH_LABELS } from "@/lib/types";
+import { formatDateTime } from "@/lib/format-date";
 import { ResendPanel } from "./resend-panel";
 
 function countUnique(events: TrackingEvent[], type: string): number {
@@ -366,7 +367,7 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
                       {e.url ?? "—"}
                     </td>
                     <td className="px-4 py-2 text-neutral-500">
-                      {e.when ? new Date(e.when).toLocaleString() : "—"}
+                      {formatDateTime(e.when)}
                     </td>
                   </tr>
                 );

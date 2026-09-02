@@ -8,6 +8,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { generateQrCodeDataUrl } from "@/lib/qrcode";
 import { buildEventInviteDesign } from "@/lib/unlayer-design";
 import { buildEventEmailHtml } from "@/lib/event-email";
+import { formatDateTime } from "@/lib/format-date";
 import type { Event, EventFieldType, EventInviteMode, EventStatus } from "@/lib/types";
 
 const IMAGE_BUCKET = "campaign-images";
@@ -162,7 +163,7 @@ export async function createInviteCampaignForEvent({ eventId, origin }: { eventI
   });
 
   const details = [
-    event.starts_at ? new Date(event.starts_at).toLocaleString("en-AU") : null,
+    event.starts_at ? formatDateTime(event.starts_at) : null,
     event.location,
   ]
     .filter(Boolean)

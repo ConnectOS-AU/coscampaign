@@ -55,9 +55,17 @@ export default async function SurveyResultsPage({ params }: { params: Promise<{ 
 
   return (
     <div className="max-w-3xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-neutral-900">{survey.name} — Results</h1>
-        <p className="text-sm text-neutral-500">{(responses ?? []).length} responses</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-neutral-900">{survey.name} — Results</h1>
+          <p className="text-sm text-neutral-500">{(responses ?? []).length} responses</p>
+        </div>
+        <a
+          href={`/api/surveys/${id}/export`}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
+        >
+          Export CSV
+        </a>
       </div>
 
       {(questions ?? []).map((q, i) => {
