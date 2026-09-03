@@ -84,6 +84,7 @@ export function CampaignEditor({
   );
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const onLoad: EmailEditorProps["onLoad"] = (unlayer) => {
@@ -184,6 +185,24 @@ export function CampaignEditor({
       return;
     }
 
+    let recipientDescription = "the recipients selected when this resend was created";
+    if (!isResend) {
+      if (recipientSource === "event") {
+        const registrantCount = eventOptions.find((e) => e.id === eventId)?.registrantCount ?? 0;
+        recipientDescription = `${registrantCount} event registrant${registrantCount === 1 ? "" : "s"}`;
+      } else if (recipientSource === "individual") {
+        recipientDescription = `${individualRecipients.length} selected recipient${individualRecipients.length === 1 ? "" : "s"}`;
+      } else {
+        recipientDescription = `${matchingCount} matching employee${matchingCount === 1 ? "" : "s"}`;
+      }
+    }
+    const confirmed = window.confirm(
+      mode === "schedule"
+        ? `Schedule this campaign to send to ${recipientDescription}?`
+        : `Send this campaign now to ${recipientDescription}? This can't be undone.`,
+    );
+    if (!confirmed) return;
+
     let sendAt: string | "now" = "now";
     if (mode === "schedule") {
       const input = window.prompt("Send at (ISO 8601, e.g. 2026-09-01T09:00:00Z):");
@@ -230,6 +249,36 @@ export function CampaignEditor({
       setMessage({ type: "error", text: err instanceof Error ? err.message : "Failed to send" });
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleSendTest() {
+    if (!subject.trim()) {
+      setMessage({ type: "error", text: "Subject is required before sending a test." });
+      return;
+    }
+    const senderEmail = senders.find((s) => s.id.toString() === senderId)?.from_email;
+    if (!senderEmail) {
+      setMessage({ type: "error", text: "Choose a verified sender before sending a test." });
+      return;
+    }
+
+    setSendingTest(true);
+    setMessage(null);
+    try {
+      const { html } = await exportEditorState();
+      const res = await fetch(`/api/campaigns/${campaign.id}/test-send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject, html, to: senderEmail }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? `Test send failed (${res.status})`);
+      setMessage({ type: "success", text: `Test email sent to ${senderEmail}.` });
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Failed to send test" });
+    } finally {
+      setSendingTest(false);
     }
   }
 
@@ -384,6 +433,13 @@ export function CampaignEditor({
             {saving ? "Saving..." : "Save draft"}
           </button>
           <button
+            onClick={handleSendTest}
+            disabled={sendingTest}
+            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+          >
+            {sendingTest ? "Sending test..." : "Send test"}
+          </button>
+          <button
             onClick={() => handleSend("schedule")}
             disabled={sending}
             className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
@@ -536,7 +592,12 @@ export function CampaignEditor({
       </div>
 
       <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-        <EmailEditor ref={editorRef} onLoad={onLoad} minHeight="800px" options={{ mergeTags: MERGE_TAGS }} />
+        <EmailEditor
+          ref={editorRef}
+          onLoad={onLoad}
+          minHeight="800px"
+          options={{ mergeTags: MERGE_TAGS, tools: { table: { enabled: true } } }}
+        />
       </div>
 
       {selectImageDone && (

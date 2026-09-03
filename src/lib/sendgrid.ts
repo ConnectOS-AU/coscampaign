@@ -127,6 +127,11 @@ export async function getSingleSend(id: string): Promise<SingleSend> {
   return sgFetch<SingleSend>(`/marketing/singlesends/${id}`);
 }
 
+/** Cancels a future scheduled send in SendGrid -- only works while it's still "scheduled", not once it's gone out. */
+export async function cancelScheduledSingleSend(id: string): Promise<void> {
+  await sgFetch<void>(`/marketing/singlesends/${id}/schedule`, { method: "DELETE" });
+}
+
 export type Sender = {
   id: number;
   nickname: string;

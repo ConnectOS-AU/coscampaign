@@ -4,6 +4,7 @@ import type { Campaign, CampaignLink, EngagementPixel, TrackingEvent } from "@/l
 import { READ_DEPTH_LABELS } from "@/lib/types";
 import { formatDateTime } from "@/lib/format-date";
 import { ResendPanel } from "./resend-panel";
+import { CancelSendButton } from "./cancel-send-button";
 
 function countUnique(events: TrackingEvent[], type: string): number {
   return new Set(events.filter((e) => e.event_type === type).map((e) => e.contact_email)).size;
@@ -183,15 +184,21 @@ export default async function CampaignReportPage({ params }: { params: Promise<{
           <h1 className="text-2xl font-semibold text-neutral-900">{campaign.name}</h1>
           <p className="text-sm text-neutral-500">{campaign.subject}</p>
         </div>
-        {campaign.status !== "draft" && campaign.status !== "queued" && (
-          <ResendPanel campaignId={id} recipients={recipients} notOpened={notOpened} notReceived={notReceived} />
-        )}
+        <div className="flex items-start gap-2">
+          {(campaign.status === "queued" || campaign.status === "scheduled") && (
+            <CancelSendButton campaignId={id} />
+          )}
+          {campaign.status !== "draft" && campaign.status !== "queued" && (
+            <ResendPanel campaignId={id} recipients={recipients} notOpened={notOpened} notReceived={notReceived} />
+          )}
+        </div>
       </div>
 
       {campaign.status === "queued" && (
         <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
           Preparing to send -- SendGrid is importing the recipient list. This page will show delivery stats once
-          it's actually sent, usually within a few minutes; refresh to check.
+          it&apos;s actually sent, usually within a few minutes; refresh to check. You can still cancel above
+          before it goes out.
         </div>
       )}
 

@@ -16,7 +16,10 @@ const STATUS_STYLES: Record<Campaign["status"], string> = {
   sent: "bg-green-100 text-green-800",
 };
 
-type CampaignRow = Pick<Campaign, "id" | "name" | "subject" | "status" | "sent_at" | "scheduled_at" | "updated_at">;
+type CampaignRow = Pick<
+  Campaign,
+  "id" | "name" | "subject" | "status" | "sent_at" | "scheduled_at" | "updated_at" | "created_by"
+>;
 
 const DRAFTS_GROUP = "Drafts";
 const QUEUED_GROUP = "Queued -- preparing to send";
@@ -54,9 +57,15 @@ export default async function CampaignsPage() {
   const supabase = createServiceRoleClient();
   const { data: campaigns, error } = await supabase
     .from("marketing_email_campaigns")
-    .select("id, name, subject, status, sent_at, scheduled_at, updated_at")
+    .select("id, name, subject, status, sent_at, scheduled_at, updated_at, created_by")
     .order("updated_at", { ascending: false })
     .returns<CampaignRow[]>();
+
+  const creatorIds = [...new Set((campaigns ?? []).map((c) => c.created_by).filter((id): id is string => id !== null))];
+  const { data: creators } = creatorIds.length
+    ? await supabase.from("app_users").select("id, email").in("id", creatorIds).returns<{ id: string; email: string }[]>()
+    : { data: [] as { id: string; email: string }[] };
+  const creatorEmailById = new Map((creators ?? []).map((u) => [u.id, u.email]));
 
   const groups = groupCampaigns(campaigns ?? []);
 
@@ -95,6 +104,7 @@ export default async function CampaignsPage() {
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Subject</th>
               <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Created by</th>
               <th className="px-4 py-3 font-medium">Updated</th>
               <th className="px-4 py-3 font-medium"></th>
             </tr>
@@ -103,7 +113,7 @@ export default async function CampaignsPage() {
             {groups.map(([label, rows]) => (
               <Fragment key={label}>
                 <tr>
-                  <td colSpan={5} className="bg-neutral-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  <td colSpan={6} className="bg-neutral-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                     {label}
                   </td>
                 </tr>
@@ -123,6 +133,9 @@ export default async function CampaignsPage() {
                         {c.status}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-neutral-600">
+                      {c.created_by ? (creatorEmailById.get(c.created_by) ?? "—") : "—"}
+                    </td>
                     <td className="px-4 py-3 text-neutral-500">
                       {formatDateTime(c.updated_at)}
                     </td>
@@ -135,7 +148,7 @@ export default async function CampaignsPage() {
             ))}
             {campaigns?.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-neutral-500">
+                <td colSpan={6} className="px-4 py-8 text-center text-neutral-500">
                   No campaigns yet. Create one to get started.
                 </td>
               </tr>

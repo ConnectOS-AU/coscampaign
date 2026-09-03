@@ -1,5 +1,11 @@
 import { createServiceRoleClient } from "@/lib/supabase";
-import { createSingleSend, updateSingleSend, scheduleSingleSend, getContactImportStatus } from "@/lib/sendgrid";
+import {
+  createSingleSend,
+  updateSingleSend,
+  scheduleSingleSend,
+  getContactImportStatus,
+  sendTransactionalEmail,
+} from "@/lib/sendgrid";
 import { injectReadDepthPixels } from "@/lib/read-depth";
 import type { Campaign } from "@/lib/types";
 
@@ -79,6 +85,25 @@ async function finalizeSend(supabase: ReturnType<typeof createServiceRoleClient>
         links.map((url) => ({ campaign_id: campaign.id, url })),
         { onConflict: "campaign_id,url", ignoreDuplicates: true },
       );
+  }
+
+  // A single record copy to the sender's own inbox -- not a true per-
+  // recipient BCC (SendGrid's Marketing Campaigns API has no such field,
+  // and one would mean a duplicate per recipient anyway). Sent via the
+  // plain transactional API, so it won't carry click-tracking or the
+  // {{email}}-based read-depth pixels real recipients get -- those are
+  // Marketing-Campaigns-specific personalization this endpoint doesn't
+  // resolve. Best-effort: never blocks or fails the real send.
+  if (campaign.from_email) {
+    try {
+      await sendTransactionalEmail({
+        to: campaign.from_email,
+        subject: `[Sent] ${campaign.subject}`,
+        html: campaign.html_content!,
+      });
+    } catch (err) {
+      console.error(`[campaign-queue] Failed to send archive copy for campaign ${campaign.id}:`, err);
+    }
   }
 
   console.log(`[campaign-queue] Sent campaign ${campaign.id} (${campaign.name})`);
