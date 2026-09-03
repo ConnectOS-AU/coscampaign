@@ -56,6 +56,7 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
   const [endsAt, setEndsAt] = useState(toDatetimeLocal(event.ends_at));
   const [capacityEnabled, setCapacityEnabled] = useState(event.capacity !== null);
   const [capacity, setCapacity] = useState(event.capacity?.toString() ?? "");
+  const [maxTicketsPerPerson, setMaxTicketsPerPerson] = useState(event.max_tickets_per_person.toString());
   const [inviteMode, setInviteMode] = useState<EventInviteMode>(event.invite_mode);
   const [status, setStatus] = useState<EventStatus>(event.status);
   const [bannerImageUrl, setBannerImageUrl] = useState(event.banner_image_url);
@@ -152,6 +153,7 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
         starts_at: startsAt,
         ends_at: endsAt,
         capacity: capacityEnabled && capacity ? Number(capacity) : null,
+        max_tickets_per_person: Math.max(1, Number(maxTicketsPerPerson) || 1),
         invite_mode: inviteMode,
         status,
         banner_image_url: bannerImageUrl,
@@ -347,6 +349,21 @@ export function EventEditor({ event, initialFields }: { event: Event; initialFie
               className="w-full max-w-xs rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
             />
           )}
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-neutral-700">Max tickets per person</label>
+          <input
+            type="number"
+            min={1}
+            value={maxTicketsPerPerson}
+            onChange={(e) => setMaxTicketsPerPerson(e.target.value)}
+            className="w-full max-w-xs rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+          />
+          <p className="text-xs text-neutral-500">
+            When more than 1, the registration form asks for each additional guest&apos;s name and relationship
+            to the registrant. Counts toward capacity above.
+          </p>
         </div>
 
         <div className="space-y-1.5 md:col-span-2">

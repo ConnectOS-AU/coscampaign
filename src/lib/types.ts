@@ -153,6 +153,10 @@ export type Event = {
   banner_image_url: string | null;
   accent_color: string | null;
   capacity: number | null;
+  // How many tickets a single registration can claim for themselves +
+  // guests. 1 (the default) means no guests -- the registration form only
+  // shows guest name/relationship fields when this is > 1.
+  max_tickets_per_person: number;
   invite_mode: EventInviteMode;
   status: EventStatus;
   created_by: string | null;
@@ -198,6 +202,9 @@ export type EventRegistration = {
   verified_email: string;
   email_confirmed_at: string | null;
   status: EventRegistrationStatus;
+  // Total tickets this registration claims (the registrant + their guests).
+  // Capacity/waitlist checks count this, not registration rows.
+  ticket_count: number;
   registered_at: string;
 };
 
@@ -206,6 +213,14 @@ export type EventRegistrationAnswer = {
   registration_id: string;
   field_id: string;
   answer_text: string | null;
+};
+
+export type EventRegistrationGuest = {
+  id: string;
+  registration_id: string;
+  name: string;
+  relationship: string;
+  created_at: string;
 };
 
 export type CampaignFunnel = {

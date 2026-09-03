@@ -12,15 +12,38 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     name?: unknown;
     email?: unknown;
     cosid?: unknown;
+    ticketCount?: unknown;
+    guests?: unknown;
     answers?: unknown;
   };
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const cosid = typeof body.cosid === "string" ? body.cosid.trim().toUpperCase() : "";
   const answers: unknown[] = Array.isArray(body.answers) ? body.answers : [];
+  const ticketCount = typeof body.ticketCount === "number" && Number.isInteger(body.ticketCount) ? body.ticketCount : 1;
+  const rawGuests: unknown[] = Array.isArray(body.guests) ? body.guests : [];
+  const guests = rawGuests
+    .map((g) => ({
+      name: typeof g === "object" && g !== null && typeof (g as { name?: unknown }).name === "string"
+        ? (g as { name: string }).name.trim()
+        : "",
+      relationship:
+        typeof g === "object" && g !== null && typeof (g as { relationship?: unknown }).relationship === "string"
+          ? (g as { relationship: string }).relationship.trim()
+          : "",
+    }));
 
   if (!name || !email || !cosid) {
     return NextResponse.json({ error: "Name, email, and COSID are required" }, { status: 400 });
+  }
+  if (ticketCount < 1) {
+    return NextResponse.json({ error: "Number of tickets must be at least 1" }, { status: 400 });
+  }
+  if (guests.length !== ticketCount - 1 || guests.some((g) => !g.name || !g.relationship)) {
+    return NextResponse.json(
+      { error: "Each additional guest needs a name and relationship" },
+      { status: 400 },
+    );
   }
 
   const employee = await lookupEmployeeByCosid(cosid);
@@ -43,6 +66,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   if (event.status !== "open") {
     return NextResponse.json({ error: "Registration is not open for this event" }, { status: 409 });
+  }
+  if (ticketCount > event.max_tickets_per_person) {
+    return NextResponse.json(
+      { error: `This event allows at most ${event.max_tickets_per_person} ticket(s) per person` },
+      { status: 400 },
+    );
   }
 
   const { data: fields } = await supabase
@@ -75,24 +104,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  // Optimistic capacity check (count then insert, not a locked transaction) --
+  // Optimistic capacity check (sum then insert, not a locked transaction) --
   // acceptable for an internal tool's traffic; a burst of simultaneous
-  // last-slot submissions could over-book by a small margin.
+  // last-slot submissions could over-book by a small margin. Counts total
+  // tickets (registrant + guests), not registration rows, so a multi-ticket
+  // registration takes up its full claim -- and if there isn't room for all
+  // of it, the whole registration (not just the overflow) goes to waitlist,
+  // since a partially-confirmed group doesn't make sense.
   let status: "confirmed" | "waitlisted" = "confirmed";
   if (event.capacity !== null) {
-    const { count } = await supabase
+    const { data: confirmedRows } = await supabase
       .from("marketing_email_event_registrations")
-      .select("id", { count: "exact", head: true })
+      .select("ticket_count")
       .eq("event_id", id)
-      .eq("status", "confirmed");
-    if ((count ?? 0) >= event.capacity) {
+      .eq("status", "confirmed")
+      .returns<{ ticket_count: number }[]>();
+    const confirmedTickets = (confirmedRows ?? []).reduce((sum, r) => sum + r.ticket_count, 0);
+    if (confirmedTickets + ticketCount > event.capacity) {
       status = "waitlisted";
     }
   }
 
   const { data: registration, error: registrationError } = await supabase
     .from("marketing_email_event_registrations")
-    .insert({ event_id: id, name, email, cosid, verified_email: employee.email, status })
+    .insert({ event_id: id, name, email, cosid, verified_email: employee.email, status, ticket_count: ticketCount })
     .select("id")
     .single();
 
@@ -101,6 +136,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "You've already registered for this event" }, { status: 409 });
     }
     return NextResponse.json({ error: "Failed to record registration" }, { status: 500 });
+  }
+
+  if (guests.length > 0) {
+    const { error: guestsError } = await supabase.from("marketing_email_event_registration_guests").insert(
+      guests.map((g) => ({ registration_id: registration.id, name: g.name, relationship: g.relationship })),
+    );
+    if (guestsError) {
+      return NextResponse.json({ error: "Registered, but failed to save guest details" }, { status: 500 });
+    }
   }
 
   const rows = [...answersByFieldId.entries()].map(([field_id, answer_text]) => ({
@@ -134,6 +178,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         bodyHtml: `
           <p>Hi ${employee.name.split(" ")[0]},</p>
           <p>You (or someone using your COSID) registered for <strong>${event.name}</strong>${
+            ticketCount > 1 ? ` (${ticketCount} tickets, including your guests)` : ""
+          }${
             status === "waitlisted" ? " and are currently on the waitlist" : ""
           }. Click below to confirm this is really you within the next 72 hours, or the registration will be
           automatically cancelled.</p>

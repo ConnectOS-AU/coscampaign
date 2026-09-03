@@ -14,12 +14,17 @@ function firstName(name: string): string {
  * Promotes the longest-waiting *verified* waitlisted registrant to confirmed
  * when a confirmed spot frees up, and lets them know. Only considers already
  * email-confirmed registrants -- an unconfirmed one would be cleaned up by
- * the same 72h rule as everyone else, not promoted.
+ * the same 72h rule as everyone else, not promoted. Since registrations can
+ * claim more than one ticket, the freed-up spot might not fit the next
+ * candidate's ticket_count -- in that case nothing is promoted this round
+ * rather than skipping ahead to a smaller one, preserving first-come-first-
+ * served order.
  */
 async function promoteNextWaitlisted(
   supabase: ReturnType<typeof createServiceRoleClient>,
   eventId: string,
   eventName: string,
+  capacity: number | null,
 ) {
   const { data: next } = await supabase
     .from("marketing_email_event_registrations")
@@ -32,6 +37,19 @@ async function promoteNextWaitlisted(
     .maybeSingle<EventRegistration>();
 
   if (!next) return;
+
+  if (capacity !== null) {
+    const { data: confirmedRows } = await supabase
+      .from("marketing_email_event_registrations")
+      .select("ticket_count")
+      .eq("event_id", eventId)
+      .eq("status", "confirmed")
+      .returns<{ ticket_count: number }[]>();
+    const confirmedTickets = (confirmedRows ?? []).reduce((sum, r) => sum + r.ticket_count, 0);
+    if (confirmedTickets + next.ticket_count > capacity) {
+      return;
+    }
+  }
 
   const { error } = await supabase
     .from("marketing_email_event_registrations")
@@ -77,9 +95,9 @@ export async function processUnconfirmedRegistrations(): Promise<void> {
   for (const reg of stale ?? []) {
     const { data: event } = await supabase
       .from("marketing_email_events")
-      .select("name")
+      .select("name, capacity")
       .eq("id", reg.event_id)
-      .maybeSingle<{ name: string }>();
+      .maybeSingle<{ name: string; capacity: number | null }>();
     const eventName = event?.name ?? "the event";
 
     try {
@@ -109,7 +127,7 @@ export async function processUnconfirmedRegistrations(): Promise<void> {
     console.log(`[event-registration-cleanup] Cancelled unconfirmed registration ${reg.id} (${reg.event_id})`);
 
     if (reg.status === "confirmed") {
-      await promoteNextWaitlisted(supabase, reg.event_id, eventName);
+      await promoteNextWaitlisted(supabase, reg.event_id, eventName, event?.capacity ?? null);
     }
   }
 }

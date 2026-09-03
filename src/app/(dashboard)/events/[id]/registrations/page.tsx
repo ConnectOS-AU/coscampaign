@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
-import type { Event, EventField, EventRegistration, EventRegistrationAnswer } from "@/lib/types";
+import type { Event, EventField, EventRegistration, EventRegistrationAnswer, EventRegistrationGuest } from "@/lib/types";
 import { formatDateTime } from "@/lib/format-date";
 
 export default async function EventRegistrationsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,13 +39,22 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
   }
 
   const registrationIds = (registrations ?? []).map((r) => r.id);
-  const { data: answers } = registrationIds.length
-    ? await supabase
-        .from("marketing_email_event_registration_answers")
-        .select("*")
-        .in("registration_id", registrationIds)
-        .returns<EventRegistrationAnswer[]>()
-    : { data: [] as EventRegistrationAnswer[] };
+  const [{ data: answers }, { data: guests }] = await Promise.all([
+    registrationIds.length
+      ? supabase
+          .from("marketing_email_event_registration_answers")
+          .select("*")
+          .in("registration_id", registrationIds)
+          .returns<EventRegistrationAnswer[]>()
+      : Promise.resolve({ data: [] as EventRegistrationAnswer[] }),
+    registrationIds.length
+      ? supabase
+          .from("marketing_email_event_registration_guests")
+          .select("*")
+          .in("registration_id", registrationIds)
+          .returns<EventRegistrationGuest[]>()
+      : Promise.resolve({ data: [] as EventRegistrationGuest[] }),
+  ]);
 
   const answersByRegistration = new Map<string, Map<string, string>>();
   for (const a of answers ?? []) {
@@ -54,8 +63,19 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
     answersByRegistration.set(a.registration_id, byField);
   }
 
-  const confirmedCount = (registrations ?? []).filter((r) => r.status === "confirmed").length;
-  const waitlistedCount = (registrations ?? []).length - confirmedCount;
+  const guestsByRegistration = new Map<string, EventRegistrationGuest[]>();
+  for (const g of guests ?? []) {
+    const list = guestsByRegistration.get(g.registration_id) ?? [];
+    list.push(g);
+    guestsByRegistration.set(g.registration_id, list);
+  }
+
+  const confirmedTickets = (registrations ?? [])
+    .filter((r) => r.status === "confirmed")
+    .reduce((sum, r) => sum + r.ticket_count, 0);
+  const waitlistedTickets = (registrations ?? [])
+    .filter((r) => r.status === "waitlisted")
+    .reduce((sum, r) => sum + r.ticket_count, 0);
 
   return (
     <div className="space-y-6">
@@ -63,7 +83,8 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">{event.name} — Registrations</h1>
           <p className="text-sm text-neutral-500">
-            {confirmedCount} confirmed{waitlistedCount > 0 ? `, ${waitlistedCount} waitlisted` : ""}
+            {confirmedTickets} confirmed ticket{confirmedTickets === 1 ? "" : "s"}
+            {waitlistedTickets > 0 ? `, ${waitlistedTickets} waitlisted` : ""}
           </p>
         </div>
         <a
@@ -83,6 +104,8 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
               <th className="px-4 py-3 font-medium">COSID</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Verified</th>
+              <th className="px-4 py-3 font-medium">Tickets</th>
+              <th className="px-4 py-3 font-medium">Guests</th>
               {(fields ?? []).map((f) => (
                 <th key={f.id} className="px-4 py-3 font-medium">
                   {f.field_label}
@@ -115,6 +138,14 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                     {r.email_confirmed_at ? "Verified" : "Pending"}
                   </span>
                 </td>
+                <td className="px-4 py-3 text-neutral-600">{r.ticket_count}</td>
+                <td className="px-4 py-3 text-neutral-600">
+                  {(guestsByRegistration.get(r.id) ?? []).length === 0
+                    ? "—"
+                    : (guestsByRegistration.get(r.id) ?? [])
+                        .map((g) => `${g.name} (${g.relationship})`)
+                        .join(", ")}
+                </td>
                 {(fields ?? []).map((f) => (
                   <td key={f.id} className="px-4 py-3 text-neutral-600">
                     {answersByRegistration.get(r.id)?.get(f.id) ?? ""}
@@ -125,7 +156,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
             ))}
             {(registrations ?? []).length === 0 && (
               <tr>
-                <td colSpan={6 + (fields ?? []).length} className="px-4 py-8 text-center text-neutral-500">
+                <td colSpan={8 + (fields ?? []).length} className="px-4 py-8 text-center text-neutral-500">
                   No registrations yet.
                 </td>
               </tr>

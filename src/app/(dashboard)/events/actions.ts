@@ -48,6 +48,7 @@ export async function saveEvent(input: {
   starts_at: string;
   ends_at: string;
   capacity: number | null;
+  max_tickets_per_person: number;
   invite_mode: EventInviteMode;
   status: EventStatus;
   banner_image_url: string | null;
@@ -68,6 +69,7 @@ export async function saveEvent(input: {
       starts_at: input.starts_at || null,
       ends_at: input.ends_at || null,
       capacity: input.capacity,
+      max_tickets_per_person: input.max_tickets_per_person,
       invite_mode: input.invite_mode,
       status: input.status,
       banner_image_url: input.banner_image_url,

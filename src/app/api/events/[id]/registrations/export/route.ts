@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { toCsv, csvResponse } from "@/lib/csv";
 import { formatDateTime } from "@/lib/format-date";
-import type { Event, EventField, EventRegistration, EventRegistrationAnswer } from "@/lib/types";
+import type { Event, EventField, EventRegistration, EventRegistrationAnswer, EventRegistrationGuest } from "@/lib/types";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -35,19 +35,35 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   const registrationIds = (registrations ?? []).map((r) => r.id);
-  const { data: answers } = registrationIds.length
-    ? await supabase
-        .from("marketing_email_event_registration_answers")
-        .select("*")
-        .in("registration_id", registrationIds)
-        .returns<EventRegistrationAnswer[]>()
-    : { data: [] as EventRegistrationAnswer[] };
+  const [{ data: answers }, { data: guests }] = await Promise.all([
+    registrationIds.length
+      ? supabase
+          .from("marketing_email_event_registration_answers")
+          .select("*")
+          .in("registration_id", registrationIds)
+          .returns<EventRegistrationAnswer[]>()
+      : Promise.resolve({ data: [] as EventRegistrationAnswer[] }),
+    registrationIds.length
+      ? supabase
+          .from("marketing_email_event_registration_guests")
+          .select("*")
+          .in("registration_id", registrationIds)
+          .returns<EventRegistrationGuest[]>()
+      : Promise.resolve({ data: [] as EventRegistrationGuest[] }),
+  ]);
 
   const answersByRegistration = new Map<string, Map<string, string>>();
   for (const a of answers ?? []) {
     const byField = answersByRegistration.get(a.registration_id) ?? new Map<string, string>();
     byField.set(a.field_id, a.answer_text ?? "");
     answersByRegistration.set(a.registration_id, byField);
+  }
+
+  const guestsByRegistration = new Map<string, EventRegistrationGuest[]>();
+  for (const g of guests ?? []) {
+    const list = guestsByRegistration.get(g.registration_id) ?? [];
+    list.push(g);
+    guestsByRegistration.set(g.registration_id, list);
   }
 
   const fieldColumns = (fields ?? [])
@@ -60,6 +76,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     { key: "cosid", label: "COSID" },
     { key: "status", label: "Status" },
     { key: "verified", label: "Verified" },
+    { key: "ticket_count", label: "Tickets" },
+    { key: "guests", label: "Guests" },
     ...fieldColumns,
     { key: "registered_at", label: "Registered At" },
   ];
@@ -71,6 +89,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       cosid: r.cosid,
       status: r.status,
       verified: r.email_confirmed_at ? "Verified" : "Pending",
+      ticket_count: r.ticket_count,
+      guests: (guestsByRegistration.get(r.id) ?? []).map((g) => `${g.name} (${g.relationship})`).join("; "),
       registered_at: formatDateTime(r.registered_at),
     };
     for (const f of fieldColumns) {

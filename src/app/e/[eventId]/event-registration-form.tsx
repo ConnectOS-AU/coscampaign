@@ -5,23 +5,42 @@ import type { EventField } from "@/lib/types";
 
 const YES_NO_OPTIONS = ["Yes", "No"];
 
+type Guest = { name: string; relationship: string };
+
 export function EventRegistrationForm({
   eventId,
   fields,
   accentColor,
+  maxTicketsPerPerson,
 }: {
   eventId: string;
   fields: EventField[];
   accentColor: string | null;
+  maxTicketsPerPerson: number;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [cosid, setCosid] = useState("");
+  const [ticketCount, setTicketCount] = useState(1);
+  const [guests, setGuests] = useState<Guest[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [checkboxAnswers, setCheckboxAnswers] = useState<Record<string, string[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ status: "confirmed" | "waitlisted"; verifiedEmail: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function handleTicketCountChange(count: number) {
+    setTicketCount(count);
+    setGuests((prev) => {
+      const guestCount = count - 1;
+      if (guestCount <= prev.length) return prev.slice(0, guestCount);
+      return [...prev, ...Array.from({ length: guestCount - prev.length }, () => ({ name: "", relationship: "" }))];
+    });
+  }
+
+  function updateGuest(index: number, field: keyof Guest, value: string) {
+    setGuests((prev) => prev.map((g, i) => (i === index ? { ...g, [field]: value } : g)));
+  }
 
   function toggleCheckbox(fieldId: string, option: string) {
     setCheckboxAnswers((prev) => {
@@ -43,6 +62,8 @@ export function EventRegistrationForm({
           name,
           email,
           cosid,
+          ticketCount,
+          guests,
           answers: fields
             .filter((f) => f.field_type !== "section")
             .map((f) => ({
@@ -66,7 +87,9 @@ export function EventRegistrationForm({
       <div className="mt-6 space-y-2">
         <p className="text-sm font-medium text-neutral-900">
           {result.status === "waitlisted"
-            ? "This event is full, so you've been added to the waitlist."
+            ? ticketCount > 1
+              ? `This event doesn't have room for all ${ticketCount} tickets right now, so you've been added to the waitlist.`
+              : "This event is full, so you've been added to the waitlist."
             : "Almost there!"}
         </p>
         <p className="text-sm text-neutral-600">
@@ -111,6 +134,48 @@ export function EventRegistrationForm({
           Used to verify it&apos;s really you — your confirmation link goes to the email on file for this ID.
         </p>
       </div>
+
+      {maxTicketsPerPerson > 1 && (
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-neutral-800">Number of tickets</label>
+          <select
+            value={ticketCount}
+            onChange={(e) => handleTicketCountChange(Number(e.target.value))}
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+          >
+            {Array.from({ length: maxTicketsPerPerson }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {guests.map((guest, i) => (
+        <div key={i} className="space-y-3 rounded-md border border-neutral-200 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Guest {i + 1}</p>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-neutral-800">Name</label>
+            <input
+              value={guest.name}
+              onChange={(e) => updateGuest(i, "name", e.target.value)}
+              required
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-neutral-800">Relationship to you</label>
+            <input
+              value={guest.relationship}
+              onChange={(e) => updateGuest(i, "relationship", e.target.value)}
+              required
+              placeholder="e.g. Spouse, Colleague"
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+            />
+          </div>
+        </div>
+      ))}
 
       {fields.map((f) => {
         if (f.field_type === "section") {
