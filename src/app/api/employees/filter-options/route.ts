@@ -20,6 +20,8 @@ export async function POST(request: Request) {
     calendar_names: toStringArray(body.calendar_names),
     client_provinces: toStringArray(body.client_provinces),
     client_countries: toStringArray(body.client_countries),
+    work_arrangements: toStringArray(body.work_arrangements),
+    current_provinces: toStringArray(body.current_provinces),
     override_all: body.override_all === true,
   };
 

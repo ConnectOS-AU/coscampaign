@@ -10,6 +10,8 @@ const FACETS: { key: FacetKey; label: string }[] = [
   { key: "calendar_names", label: "Calendar" },
   { key: "client_provinces", label: "Client Province" },
   { key: "client_countries", label: "Client Country" },
+  { key: "work_arrangements", label: "Work Arrangement" },
+  { key: "current_provinces", label: "Current Province" },
 ];
 
 export function EmployeeRecipientPicker({
@@ -112,9 +114,11 @@ export function EmployeeRecipientPicker({
       <p className="text-xs text-neutral-500">
         Client Country/Province reflect where the client the employee works for is based, sourced from active
         employee records (more complete than joining the clients table directly, since not every employee
-        record has a matching client row). Selecting more than one value within a filter matches any of them;
-        filters across different categories narrow the result together. Recipients are resolved fresh each
-        time the campaign sends.
+        record has a matching client row). Work Arrangement and Current Province come from separate HR records
+        (position and contact details) joined in by employee ID, so they may be blank for someone missing a
+        matching record there. Selecting more than one value within a filter matches any of them; filters
+        across different categories narrow the result together. Recipients are resolved fresh each time the
+        campaign sends.
       </p>
     </div>
   );
