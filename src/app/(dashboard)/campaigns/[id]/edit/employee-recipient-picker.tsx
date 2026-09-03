@@ -8,6 +8,7 @@ type FacetKey = Exclude<keyof EmployeeRecipientFilter, "override_all">;
 const FACETS: { key: FacetKey; label: string }[] = [
   { key: "client_names", label: "Client" },
   { key: "calendar_names", label: "Calendar" },
+  { key: "client_provinces", label: "Client Province" },
   { key: "client_countries", label: "Client Country" },
 ];
 
@@ -109,9 +110,9 @@ export function EmployeeRecipientPicker({
         ))}
       </div>
       <p className="text-xs text-neutral-500">
-        Client Country reflects where the client the employee works for is based, sourced from active employee
-        records (more complete than joining the clients table directly, since not every employee record has a
-        matching client row). Selecting more than one value within a filter matches any of them;
+        Client Country/Province reflect where the client the employee works for is based, sourced from active
+        employee records (more complete than joining the clients table directly, since not every employee
+        record has a matching client row). Selecting more than one value within a filter matches any of them;
         filters across different categories narrow the result together. Recipients are resolved fresh each
         time the campaign sends.
       </p>

@@ -18,6 +18,7 @@ export async function POST(request: Request) {
     ...emptyEmployeeFilter(),
     client_names: toStringArray(body.client_names),
     calendar_names: toStringArray(body.calendar_names),
+    client_provinces: toStringArray(body.client_provinces),
     client_countries: toStringArray(body.client_countries),
     override_all: body.override_all === true,
   };

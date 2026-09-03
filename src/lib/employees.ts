@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase";
 export type EmployeeRecipientFilter = {
   client_names: string[];
   calendar_names: string[];
+  client_provinces: string[];
   client_countries: string[];
   /** Ignores every facet below and targets all active employees. */
   override_all: boolean;
@@ -12,6 +13,7 @@ export function emptyEmployeeFilter(): EmployeeRecipientFilter {
   return {
     client_names: [],
     calendar_names: [],
+    client_provinces: [],
     client_countries: [],
     override_all: false,
   };
@@ -20,6 +22,7 @@ export function emptyEmployeeFilter(): EmployeeRecipientFilter {
 const COLUMN_BY_FACET = {
   client_names: "client_name",
   calendar_names: "calendar_name",
+  client_provinces: "client_province_name",
   client_countries: "client_country_name",
 } as const;
 
