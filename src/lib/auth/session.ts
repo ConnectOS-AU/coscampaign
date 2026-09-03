@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import { createServiceRoleClient } from "@/lib/supabase";
+import { auth as authEntra } from "@/auth";
 
 export const SESSION_COOKIE_NAME = "app_session";
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -59,7 +60,26 @@ export async function resolveSession(token: string | undefined): Promise<Session
 
 export async function getSession(): Promise<Session | null> {
   const cookieStore = await cookies();
-  return resolveSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  const localSession = await resolveSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  if (localSession) return localSession;
+
+  // No local session cookie -- fall back to an Entra SSO session (see
+  // src/auth.ts). Entra's own Conditional Access/MFA already satisfies the
+  // assurance level this app cares about, so SSO sessions are always aal2
+  // and skip the local TOTP dance entirely. Permissions come from Entra
+  // group membership (resolved once at sign-in, embedded in the JWT), not
+  // from app_user_permissions.
+  const entraSession = await authEntra();
+  if (!entraSession?.appUserId || !entraSession.user?.email) return null;
+
+  return {
+    sessionId: `entra:${entraSession.appUserId}`,
+    userId: entraSession.appUserId,
+    email: entraSession.user.email,
+    aal: "aal2",
+    permissions: entraSession.permissions ?? [],
+    hasVerifiedMfa: true,
+  };
 }
 
 /**

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 export function LoginForm() {
   const router = useRouter();
@@ -11,6 +12,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
 
   const [needsMfa, setNeedsMfa] = useState(false);
   const [code, setCode] = useState("");
@@ -18,6 +20,11 @@ export function LoginForm() {
   function goToNext() {
     router.replace(searchParams.get("next") ?? "/campaigns");
     router.refresh();
+  }
+
+  function handleSsoSignIn() {
+    setSsoLoading(true);
+    signIn("microsoft-entra-id", { callbackUrl: searchParams.get("next") ?? "/campaigns" });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -110,6 +117,21 @@ export function LoginForm() {
         <Image src="/logo.png" alt="" width={140} height={28} className="h-6 w-auto" priority />
         <h1 className="text-xl font-semibold text-neutral-900">Sign in</h1>
         <p className="text-sm text-neutral-500">COSCampaign</p>
+
+        <button
+          type="button"
+          onClick={handleSsoSignIn}
+          disabled={ssoLoading}
+          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+        >
+          {ssoLoading ? "Redirecting..." : "Sign in with Microsoft"}
+        </button>
+
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-neutral-200" />
+          <span className="text-xs text-neutral-400">or</span>
+          <div className="h-px flex-1 bg-neutral-200" />
+        </div>
 
         <div className="space-y-1">
           <label htmlFor="email" className="text-sm font-medium text-neutral-700">

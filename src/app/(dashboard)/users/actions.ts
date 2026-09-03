@@ -100,3 +100,76 @@ export async function deleteUser(userId: string) {
 
   revalidatePath("/users");
 }
+
+/**
+ * Entra group -> permission mappings drive access for SSO logins (see
+ * src/auth.ts), the same way app_user_permissions drives it for local
+ * password logins. The admin pastes in the group's Object ID and a friendly
+ * name copied from the Entra admin center -- no Graph API group picker for v1.
+ */
+export async function addEntraGroupMapping(input: { groupId: string; groupName: string; permissions: PermissionKey[] }) {
+  const session = await getSession();
+  requirePermission(session, "manage_users");
+
+  const groupId = input.groupId.trim();
+  const groupName = input.groupName.trim();
+  if (!groupId || !groupName) {
+    throw new Error("Group Object ID and name are required");
+  }
+  if (input.permissions.length === 0) {
+    throw new Error("Select at least one permission");
+  }
+
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("entra_group_permissions").insert(
+    input.permissions.map((permission_key) => ({
+      entra_group_id: groupId,
+      entra_group_name: groupName,
+      permission_key,
+    })),
+  );
+  if (error) {
+    throw new Error(`Failed to add group mapping: ${error.message}`);
+  }
+
+  revalidatePath("/users");
+}
+
+export async function setEntraGroupPermissions(groupId: string, groupName: string, permissions: PermissionKey[]) {
+  const session = await getSession();
+  requirePermission(session, "manage_users");
+
+  const supabase = createServiceRoleClient();
+  const { error: deleteError } = await supabase.from("entra_group_permissions").delete().eq("entra_group_id", groupId);
+  if (deleteError) {
+    throw new Error(`Failed to update group mapping: ${deleteError.message}`);
+  }
+
+  if (permissions.length > 0) {
+    const { error: insertError } = await supabase.from("entra_group_permissions").insert(
+      permissions.map((permission_key) => ({
+        entra_group_id: groupId,
+        entra_group_name: groupName,
+        permission_key,
+      })),
+    );
+    if (insertError) {
+      throw new Error(`Failed to update group mapping: ${insertError.message}`);
+    }
+  }
+
+  revalidatePath("/users");
+}
+
+export async function deleteEntraGroupMapping(groupId: string) {
+  const session = await getSession();
+  requirePermission(session, "manage_users");
+
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("entra_group_permissions").delete().eq("entra_group_id", groupId);
+  if (error) {
+    throw new Error(`Failed to remove group mapping: ${error.message}`);
+  }
+
+  revalidatePath("/users");
+}

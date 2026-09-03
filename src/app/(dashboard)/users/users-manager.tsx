@@ -10,6 +10,7 @@ type UserRow = {
   email: string;
   createdAt: string;
   permissions: PermissionKey[];
+  isSso: boolean;
 };
 
 type PermissionDef = { key: PermissionKey; description: string };
@@ -188,6 +189,14 @@ export function UsersManager({
                 <td className="px-4 py-2 align-top text-neutral-700">
                   {u.email}
                   {u.id === currentUserId && <span className="ml-2 text-xs text-neutral-400">(you)</span>}
+                  {u.isSso && (
+                    <span
+                      className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800"
+                      title="Signs in via Entra SSO -- permissions come from their Entra group membership, not these checkboxes"
+                    >
+                      Managed via Entra ID
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-2 align-top">
                   <div className="flex flex-wrap gap-3">
@@ -196,7 +205,7 @@ export function UsersManager({
                         <input
                           type="checkbox"
                           checked={u.permissions.includes(p.key)}
-                          disabled={busyUserId === u.id}
+                          disabled={busyUserId === u.id || u.isSso}
                           onChange={() => handleTogglePermission(u.id, u.permissions, p.key)}
                         />
                         {p.key}
