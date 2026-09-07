@@ -41,6 +41,11 @@ export default async function SurveyResponsePage({
     );
   }
 
+  // Soft, UX-only check against the unverified email param -- avoids
+  // showing the form again for the common case of clicking the same link
+  // twice. Not the real guard: that's the (survey_id, verified_email)
+  // unique constraint enforced server-side in the respond route once COSID
+  // verification resolves who this actually is.
   const { data: existingResponse } = await supabase
     .from("marketing_email_survey_responses")
     .select("id")

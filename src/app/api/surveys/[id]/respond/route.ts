@@ -1,18 +1,34 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase";
+import { lookupEmployeeByCosid } from "@/lib/employees";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   const body = (await request.json().catch(() => ({}))) as {
     email?: unknown;
+    cosid?: unknown;
     answers?: unknown;
   };
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const cosid = typeof body.cosid === "string" ? body.cosid.trim().toUpperCase() : "";
   const answers: unknown[] = Array.isArray(body.answers) ? body.answers : [];
 
-  if (!email) {
-    return NextResponse.json({ error: "Missing email" }, { status: 400 });
+  if (!email || !cosid) {
+    return NextResponse.json({ error: "Email and COSID are required" }, { status: 400 });
+  }
+
+  // Verify identity against the employee directory before trusting who this
+  // response is attributed to -- the client-supplied `email` alone can't be
+  // trusted (anyone can claim to be anyone), the same reason event
+  // registration resolves a verified_email via COSID instead of the typed
+  // email.
+  const employee = await lookupEmployeeByCosid(cosid);
+  if (!employee) {
+    return NextResponse.json(
+      { error: "COSID not recognized. Please check your employee ID and try again." },
+      { status: 400 },
+    );
   }
 
   const supabase = createServiceRoleClient();
@@ -24,7 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: response, error: responseError } = await supabase
     .from("marketing_email_survey_responses")
-    .insert({ survey_id: id, contact_email: email })
+    .insert({ survey_id: id, contact_email: email, cosid, verified_email: employee.email })
     .select("id")
     .single();
 

@@ -53,6 +53,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const questionColumns = (questions ?? []).map((q) => ({ key: `q_${q.id}`, label: q.question_text }));
   const columns = [
     { key: "contact_email", label: "Email" },
+    { key: "cosid", label: "COSID" },
+    { key: "verified_email", label: "Verified Email" },
     { key: "submitted_at", label: "Submitted At" },
     ...questionColumns,
   ];
@@ -60,6 +62,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const rows = (responses ?? []).map((r) => {
     const row: Record<string, unknown> = {
       contact_email: r.contact_email,
+      cosid: r.cosid ?? "",
+      verified_email: r.verified_email ?? "",
       submitted_at: formatDateTime(r.submitted_at),
     };
     for (const q of questionColumns) {

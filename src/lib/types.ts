@@ -129,7 +129,15 @@ export type SurveyQuestion = {
 export type SurveyResponse = {
   id: string;
   survey_id: string;
+  // What the respondent typed -- may not match verified_email, kept for
+  // display. Nullable fields below are null only for responses recorded
+  // before COSID verification was added.
   contact_email: string;
+  cosid: string | null;
+  // The office_email resolved from cosphere_active_employees for `cosid`,
+  // the same verification pattern event registrations use -- this, not
+  // contact_email, is what the one-response-per-person uniqueness is on.
+  verified_email: string | null;
   submitted_at: string;
 };
 

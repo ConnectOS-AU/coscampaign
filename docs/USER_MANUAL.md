@@ -1,6 +1,6 @@
 # COScomms User Manual
 
-*Last updated: 2026-09-07 (v0.5.6). This file is maintained alongside the code — see the note at the bottom.*
+*Last updated: 2026-09-07 (v0.5.7). This file is maintained alongside the code — see the note at the bottom.*
 
 COScomms is ConnectOS's internal tool for sending email campaigns, running events with
 registration, and collecting survey feedback. This manual covers everything a user can do
@@ -158,10 +158,14 @@ button for the full list.
 share the survey link — it accepts an `{{email}}` merge tag in the URL so a link dropped
 into a campaign personalizes itself per recipient automatically.
 
+A respondent must also enter their employee ID (COSID) to submit — this is checked against
+the active employee directory the same way event registration is, so a response is always
+attributable to a real, verified person rather than any email someone chooses to type.
+
 **Results** shows aggregate answers per question (bar breakdowns for multiple choice,
 average + distribution for ratings, a list of free-text answers). **Export CSV** on that
-page gives you one row per respondent with every answer, for anything more detailed than
-the aggregate view.
+page gives you one row per respondent with every answer (plus their COSID and verified
+email), for anything more detailed than the aggregate view.
 
 ---
 

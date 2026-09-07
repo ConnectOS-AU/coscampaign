@@ -12,6 +12,7 @@ export function SurveyResponseForm({
   email: string;
   questions: SurveyQuestion[];
 }) {
+  const [cosid, setCosid] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -27,6 +28,7 @@ export function SurveyResponseForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
+          cosid,
           answers: questions.map((q) => ({ question_id: q.id, answer_text: answers[q.id] ?? "" })),
         }),
       });
@@ -46,6 +48,18 @@ export function SurveyResponseForm({
 
   return (
     <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium text-neutral-800">Employee ID (COSID)</label>
+        <input
+          value={cosid}
+          onChange={(e) => setCosid(e.target.value)}
+          required
+          placeholder="COS0000"
+          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+        />
+        <p className="text-xs text-neutral-500">Used to verify it&apos;s really you responding.</p>
+      </div>
+
       {questions.map((q, i) => (
         <div key={q.id} className="space-y-1.5">
           <label className="text-sm font-medium text-neutral-800">

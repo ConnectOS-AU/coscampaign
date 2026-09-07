@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
-import { sendTransactionalEmail } from "@/lib/sendgrid";
+import { sendTransactionalEmail, listVerifiedSenders } from "@/lib/sendgrid";
 
 /**
  * Sends a one-off test copy of whatever's currently in the editor (not
@@ -21,6 +21,19 @@ export async function POST(request: Request) {
 
   if (!subject || !html || !to) {
     return NextResponse.json({ error: "Subject, content, and a sender address are required" }, { status: 400 });
+  }
+
+  // `to` is client-supplied (the sender currently selected in the editor,
+  // which may not be saved to the campaign row yet) -- trusting it as-is
+  // would let anyone with manage_campaigns send arbitrary content to any
+  // address from the org's authenticated domain. Constraining it to the
+  // account's own verified senders keeps the feature's intent (preview in
+  // an inbox you control) while bounding the blast radius to addresses the
+  // org has already vetted, not the whole internet.
+  const verifiedSenders = await listVerifiedSenders();
+  const isVerifiedSender = verifiedSenders.some((s) => s.from_email.toLowerCase() === to.toLowerCase());
+  if (!isVerifiedSender) {
+    return NextResponse.json({ error: "Test sends can only go to a verified sender address" }, { status: 400 });
   }
 
   try {
