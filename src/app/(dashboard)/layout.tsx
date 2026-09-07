@@ -23,7 +23,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <nav className="flex flex-wrap items-center gap-x-6 gap-y-1">
             <Link href="/campaigns" className="flex items-center gap-2">
               <Image src="/logo.png" alt="" width={120} height={24} className="h-5 w-auto" priority />
-              <span className="text-sm font-semibold text-neutral-900">COSCampaign</span>
+              <span className="text-sm font-semibold text-neutral-900">COScomms</span>
             </Link>
             <Link href="/campaigns" className="text-sm text-neutral-600 hover:text-neutral-900">
               Campaigns

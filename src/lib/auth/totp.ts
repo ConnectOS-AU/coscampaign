@@ -14,7 +14,7 @@ export function generateTotpSecret(): string {
 }
 
 export function generateTotpUri(email: string, secret: string): string {
-  return otp.generateURI({ issuer: "COSCampaign", label: email, secret });
+  return otp.generateURI({ issuer: "COScomms", label: email, secret });
 }
 
 export async function verifyTotpCode(secret: string, code: string): Promise<boolean> {

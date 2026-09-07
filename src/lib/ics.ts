@@ -21,9 +21,9 @@ export function buildEventIcs(event: {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//COSCampaign//Events//EN",
+    "PRODID:-//COScomms//Events//EN",
     "BEGIN:VEVENT",
-    `UID:${event.id}@coscampaign`,
+    `UID:${event.id}@coscomms`,
     `DTSTAMP:${toIcsDate(new Date().toISOString())}`,
     `DTSTART:${toIcsDate(start)}`,
     `DTEND:${toIcsDate(end)}`,

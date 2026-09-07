@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "COSCampaign",
+  title: "COScomms",
   description: "Email campaign builder and engagement tracking on SendGrid Marketing",
 };
 

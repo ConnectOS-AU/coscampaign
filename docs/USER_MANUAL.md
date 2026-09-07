@@ -1,8 +1,8 @@
-# COSCampaign User Manual
+# COScomms User Manual
 
-*Last updated: 2026-09-03 (v0.5.5). This file is maintained alongside the code — see the note at the bottom.*
+*Last updated: 2026-09-07 (v0.5.6). This file is maintained alongside the code — see the note at the bottom.*
 
-COSCampaign is ConnectOS's internal tool for sending email campaigns, running events with
+COScomms is ConnectOS's internal tool for sending email campaigns, running events with
 registration, and collecting survey feedback. This manual covers everything a user can do
 in the app, organized by task.
 
@@ -15,7 +15,7 @@ Go to the app and sign in one of two ways:
 - **Email and password** — enter your credentials. If two-factor authentication is enabled
   on your account, you'll be asked for a 6-digit code from your authenticator app afterward.
 - **Sign in with Microsoft** — if your organization has this set up, click "Sign in with
-  Microsoft" and use your normal Microsoft 365 account. Your permissions in COSCampaign are
+  Microsoft" and use your normal Microsoft 365 account. Your permissions in COScomms are
   then controlled by which Entra ID (Microsoft 365) security groups you belong to — see
   [Section 10](#10-users--permissions-admin-only).
 

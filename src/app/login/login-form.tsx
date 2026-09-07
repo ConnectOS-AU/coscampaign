@@ -116,7 +116,7 @@ export function LoginForm() {
       >
         <Image src="/logo.png" alt="" width={140} height={28} className="h-6 w-auto" priority />
         <h1 className="text-xl font-semibold text-neutral-900">Sign in</h1>
-        <p className="text-sm text-neutral-500">COSCampaign</p>
+        <p className="text-sm text-neutral-500">COScomms</p>
 
         <button
           type="button"

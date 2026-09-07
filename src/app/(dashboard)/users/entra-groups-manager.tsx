@@ -101,7 +101,7 @@ export function EntraGroupsManager({
             <input
               type="text"
               required
-              placeholder="COSCampaign-ManageCampaigns"
+              placeholder="COScomms-ManageCampaigns"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               className="rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
