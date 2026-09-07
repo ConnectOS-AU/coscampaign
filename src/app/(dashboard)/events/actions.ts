@@ -7,7 +7,7 @@ import { getSession } from "@/lib/auth/session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { generateQrCodeDataUrl } from "@/lib/qrcode";
 import { buildEventInviteDesign } from "@/lib/unlayer-design";
-import { buildEventEmailHtml } from "@/lib/event-email";
+import { buildEventEmailHtml, escapeHtml } from "@/lib/event-email";
 import { formatDateTime } from "@/lib/format-date";
 import type { Event, EventFieldType, EventInviteMode, EventStatus } from "@/lib/types";
 
@@ -174,8 +174,8 @@ export async function createInviteCampaignForEvent({ eventId, origin }: { eventI
   const html = buildEventEmailHtml({
     eventName: event.name,
     bodyHtml: `
-      ${details ? `<p style="color: #525252;">${details}</p>` : ""}
-      ${event.description ? `<p>${event.description}</p>` : ""}
+      ${details ? `<p style="color: #525252;">${escapeHtml(details)}</p>` : ""}
+      ${event.description ? `<p>${escapeHtml(event.description)}</p>` : ""}
     `,
     cta: { text: "Register Now", url: registrationUrl },
     footerHtml: `

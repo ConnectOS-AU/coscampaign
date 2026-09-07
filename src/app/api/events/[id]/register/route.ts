@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase";
 import { lookupEmployeeByCosid } from "@/lib/employees";
 import { sendTransactionalEmail } from "@/lib/sendgrid";
-import { buildEventEmailHtml } from "@/lib/event-email";
+import { buildEventEmailHtml, escapeHtml } from "@/lib/event-email";
 import type { Event, EventField } from "@/lib/types";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -176,8 +176,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       html: buildEventEmailHtml({
         eventName: event.name,
         bodyHtml: `
-          <p>Hi ${employee.name.split(" ")[0]},</p>
-          <p>You (or someone using your COSID) registered for <strong>${event.name}</strong>${
+          <p>Hi ${escapeHtml(employee.name.split(" ")[0])},</p>
+          <p>You (or someone using your COSID) registered for <strong>${escapeHtml(event.name)}</strong>${
             ticketCount > 1 ? ` (${ticketCount} tickets, including your guests)` : ""
           }${
             status === "waitlisted" ? " and are currently on the waitlist" : ""

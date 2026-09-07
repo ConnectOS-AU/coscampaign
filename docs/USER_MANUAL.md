@@ -1,6 +1,6 @@
 # COScomms User Manual
 
-*Last updated: 2026-09-07 (v0.5.7). This file is maintained alongside the code — see the note at the bottom.*
+*Last updated: 2026-09-07 (v0.5.8). This file is maintained alongside the code — see the note at the bottom.*
 
 COScomms is ConnectOS's internal tool for sending email campaigns, running events with
 registration, and collecting survey feedback. This manual covers everything a user can do
@@ -46,7 +46,8 @@ image, button, divider, social links, table, and more — and click any block to
 - **Importing an existing email**: the **Import HTML/EML** button lets you upload a raw
   `.html` file or a `.eml` exported from Outlook (drag the email out of Outlook onto your
   desktop, or File → Save As). It loads as a single block you can edit as source, with any
-  embedded images carried over automatically.
+  embedded images carried over automatically. Imported content is sanitized on the way in
+  (scripts, embedded code, and similar are stripped) since it's coming from outside the app.
 - **Templates**: **Save as template** stores the current design for reuse; **Load
   template...** replaces the canvas with a saved one.
 
@@ -173,7 +174,8 @@ email), for anything more detailed than the aggregate view.
 
 **Images** is the shared library every campaign and event draws from. Upload images there
 directly, or upload while editing a campaign (which adds to the library automatically).
-Delete images you no longer need from the same page.
+Delete images you no longer need from the same page. Accepts PNG, JPEG, GIF, or WEBP up to
+8MB — SVG isn't supported, since it can carry embedded code.
 
 ---
 

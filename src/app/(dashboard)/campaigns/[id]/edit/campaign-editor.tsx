@@ -8,6 +8,7 @@ import type { Sender, SuppressionGroup } from "@/lib/sendgrid";
 import { emptyEmployeeFilter, type EmployeeFilterOptions } from "@/lib/employees";
 import { buildImportedHtmlDesign } from "@/lib/unlayer-design";
 import { parseEml, type InlineAsset } from "@/lib/eml-parser";
+import { sanitizeImportedHtml } from "@/lib/sanitize-imported-html";
 import { saveCampaignDraft } from "../../actions";
 import { saveTemplate } from "../../../templates/actions";
 import { ImagePickerModal } from "./image-picker-modal";
@@ -365,7 +366,15 @@ export function CampaignEditor({
         return;
       }
 
-      editorRef.current.editor.loadDesign(buildImportedHtmlDesign(html) as never);
+      // Sanitize last, after inline cid: images have already been resolved
+      // to real https URLs above -- sanitizing first would strip those cid:
+      // references before they had a chance to be replaced, since they're
+      // not an allowed URL scheme. An imported file is untrusted content
+      // (an attachment forwarded from anywhere, not something built in this
+      // editor), so scripts/handlers/unsafe URL schemes get stripped before
+      // it ever lands in the design or the actual sent email.
+      const sanitizedHtml = sanitizeImportedHtml(html);
+      editorRef.current.editor.loadDesign(buildImportedHtmlDesign(sanitizedHtml) as never);
       if (parsedSubject && !subject.trim()) setSubject(parsedSubject);
       setMessage({
         type: "success",

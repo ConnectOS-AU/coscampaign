@@ -1,6 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase";
 import { sendTransactionalEmail } from "@/lib/sendgrid";
-import { buildEventEmailHtml } from "@/lib/event-email";
+import { buildEventEmailHtml, escapeHtml } from "@/lib/event-email";
 import type { EventRegistration } from "@/lib/types";
 
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
@@ -67,7 +67,7 @@ async function promoteNextWaitlisted(
       subject: `You're off the waitlist: ${eventName}`,
       html: buildEventEmailHtml({
         eventName,
-        bodyHtml: `<p>Hi ${firstName(next.name)},</p><p>A spot opened up for <strong>${eventName}</strong> and you've been moved from the waitlist to confirmed. See you there!</p>`,
+        bodyHtml: `<p>Hi ${escapeHtml(firstName(next.name))},</p><p>A spot opened up for <strong>${escapeHtml(eventName)}</strong> and you've been moved from the waitlist to confirmed. See you there!</p>`,
       }),
     });
   } catch (err) {
@@ -106,7 +106,7 @@ export async function processUnconfirmedRegistrations(): Promise<void> {
         subject: `Registration cancelled: ${eventName}`,
         html: buildEventEmailHtml({
           eventName,
-          bodyHtml: `<p>Hi ${firstName(reg.name)},</p><p>Your registration for <strong>${eventName}</strong> wasn't
+          bodyHtml: `<p>Hi ${escapeHtml(firstName(reg.name))},</p><p>Your registration for <strong>${escapeHtml(eventName)}</strong> wasn't
             confirmed within 72 hours, so it has been automatically cancelled. If you'd still like to attend,
             you're welcome to register again.</p>`,
         }),

@@ -1,5 +1,16 @@
+// CSV formula injection: Excel/Sheets treat a cell starting with =, +, -, or
+// @ as a formula when the file is opened, not plain text -- a survey answer
+// or staff name containing one (accidentally or not) can execute a formula
+// on whoever opens the export. A leading apostrophe is the standard
+// mitigation: it forces the cell to text and is invisible in normal
+// spreadsheet display.
+const FORMULA_TRIGGER_CHARS = /^[=+\-@]/;
+
 function escapeCsvCell(value: unknown): string {
-  const text = value === null || value === undefined ? "" : String(value);
+  let text = value === null || value === undefined ? "" : String(value);
+  if (FORMULA_TRIGGER_CHARS.test(text)) {
+    text = `'${text}`;
+  }
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

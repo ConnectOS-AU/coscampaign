@@ -5,6 +5,18 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 
+// `next` comes from a URL query param an attacker controls (e.g. a phishing
+// link to /login?next=https://evil.example). Only a same-origin relative
+// path is safe to redirect to -- a bare "/" prefix is not enough on its own,
+// since "//evil.com" and "/\evil.com" are both protocol-relative URLs
+// browsers treat as external.
+function safeNextPath(value: string | null): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) {
+    return "/campaigns";
+  }
+  return value;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -18,13 +30,13 @@ export function LoginForm() {
   const [code, setCode] = useState("");
 
   function goToNext() {
-    router.replace(searchParams.get("next") ?? "/campaigns");
+    router.replace(safeNextPath(searchParams.get("next")));
     router.refresh();
   }
 
   function handleSsoSignIn() {
     setSsoLoading(true);
-    signIn("microsoft-entra-id", { callbackUrl: searchParams.get("next") ?? "/campaigns" });
+    signIn("microsoft-entra-id", { callbackUrl: safeNextPath(searchParams.get("next")) });
   }
 
   async function handleSubmit(e: React.FormEvent) {
