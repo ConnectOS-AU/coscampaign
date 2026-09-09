@@ -389,13 +389,17 @@ export function CampaignEditor({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full max-w-md rounded-md border border-transparent bg-transparent px-1 text-2xl font-semibold text-neutral-900 hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
-        />
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between">
+        <div className="flex max-w-md flex-col gap-1">
+          <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Campaign name</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Untitled campaign"
+            className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-2xl font-semibold text-neutral-900 shadow-sm hover:border-neutral-400 focus:border-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-200"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <input
             ref={importFileInputRef}
             type="file"
@@ -410,7 +414,7 @@ export function CampaignEditor({
           <button
             onClick={() => importFileInputRef.current?.click()}
             disabled={importing}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+            className="w-[150px] shrink-0 whitespace-nowrap rounded-md bg-[#333333] px-4 py-2 text-center text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             {importing ? "Importing..." : "Import HTML/EML"}
           </button>
@@ -418,7 +422,7 @@ export function CampaignEditor({
             value=""
             onChange={(e) => handleLoadTemplate(e.target.value)}
             disabled={templates.length === 0}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-700 disabled:opacity-50"
+            className="w-[150px] shrink-0 rounded-md bg-[#333333] px-3 py-2 text-sm text-white disabled:opacity-50"
           >
             <option value="">Load template...</option>
             {templates.map((t) => (
@@ -430,35 +434,35 @@ export function CampaignEditor({
           <button
             onClick={handleSaveAsTemplate}
             disabled={savingTemplate}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+            className="w-[150px] shrink-0 whitespace-nowrap rounded-md bg-[#333333] px-4 py-2 text-center text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             {savingTemplate ? "Saving..." : "Save as template"}
           </button>
           <button
             onClick={handleSaveDraft}
             disabled={saving}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+            className="w-[150px] shrink-0 whitespace-nowrap rounded-md bg-[#333333] px-4 py-2 text-center text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save draft"}
           </button>
           <button
             onClick={handleSendTest}
             disabled={sendingTest}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+            className="w-[150px] shrink-0 whitespace-nowrap rounded-md bg-[#333333] px-4 py-2 text-center text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             {sendingTest ? "Sending test..." : "Send test"}
           </button>
           <button
             onClick={() => handleSend("schedule")}
             disabled={sending}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+            className="w-[150px] shrink-0 whitespace-nowrap rounded-md bg-[#333333] px-4 py-2 text-center text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             Schedule
           </button>
           <button
             onClick={() => handleSend("now")}
             disabled={sending}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+            className="w-[150px] shrink-0 whitespace-nowrap rounded-md bg-[#333333] px-4 py-2 text-center text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             {sending ? "Sending..." : "Send now"}
           </button>
